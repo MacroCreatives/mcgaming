@@ -2,1612 +2,1103 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OBB Asset Editor v2.0</title>
-<!-- No external dependencies: custom ZIP parser handles everything -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>OBB Asset Editor v3.0</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #0d0f12;
-    --surface: #14171c;
-    --border: #1e2330;
-    --accent: #4f8ef7;
-    --accent2: #7c5cfc;
-    --success: #29d884;
-    --warn: #f7b84f;
-    --danger: #f75a5a;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-  }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    font-size: 14px;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  header {
-    padding: 18px 28px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: var(--surface);
-  }
-
-  .logo {
-    width: 34px; height: 34px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 17px;
-  }
-
-  header h1 {
-    font-family: var(--mono);
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    color: var(--text);
-  }
-
-  header span {
-    font-size: 12px;
-    color: var(--muted);
-    margin-left: 4px;
-  }
-
-  .badge {
-    margin-left: auto;
-    background: rgba(79,142,247,0.12);
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 3px 10px;
-    border-radius: 20px;
-    border: 1px solid rgba(79,142,247,0.25);
-  }
-
-  main {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    grid-template-rows: auto 1fr;
-    gap: 0;
-    max-height: calc(100vh - 62px);
-  }
-
-  /* DROP ZONE */
-  .drop-panel {
-    grid-column: 1 / -1;
-    padding: 20px 28px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    background: var(--surface);
-  }
-
-  #dropzone {
-    flex: 1;
-    border: 1.5px dashed var(--border);
-    border-radius: 10px;
-    padding: 22px 28px;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
-    position: relative;
-  }
-
-  #dropzone:hover, #dropzone.dragover {
-    border-color: var(--accent);
-    background: rgba(79,142,247,0.04);
-  }
-
-  #dropzone input { display: none; }
-
-  .drop-icon { font-size: 28px; margin-bottom: 6px; }
-
-  .drop-text {
-    font-size: 13px;
-    color: var(--muted);
-  }
-
-  .drop-text strong { color: var(--accent); cursor: pointer; }
-
-  #file-info {
-    display: none;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 220px;
-  }
-
-  .file-name {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 280px;
-  }
-
-  .file-meta { font-size: 11px; color: var(--muted); }
-
-  .pill {
-    display: inline-block;
-    background: rgba(41,216,132,0.12);
-    color: var(--success);
-    border: 1px solid rgba(41,216,132,0.25);
-    font-size: 11px;
-    font-family: var(--mono);
-    padding: 2px 8px;
-    border-radius: 20px;
-  }
-
-  .btn {
-    font-family: var(--sans);
-    font-size: 13px;
-    font-weight: 500;
-    padding: 8px 16px;
-    border-radius: 7px;
-    border: none;
-    cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
-    white-space: nowrap;
-  }
-
-  .btn:active { transform: scale(0.97); }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  .btn-primary {
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    color: #fff;
-  }
-
-  .btn-ghost {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-  }
-
-  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-
-  .btn-success {
-    background: rgba(41,216,132,0.15);
-    color: var(--success);
-    border: 1px solid rgba(41,216,132,0.3);
-  }
-
-  .btn-danger {
-    background: rgba(247,90,90,0.12);
-    color: var(--danger);
-    border: 1px solid rgba(247,90,90,0.25);
-  }
-
-  /* SIDEBAR */
-  .sidebar {
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    background: var(--surface);
-  }
-
-  .sidebar-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .sidebar-header h2 {
-    font-size: 12px;
-    font-family: var(--mono);
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    flex: 1;
-  }
-
-  .count-badge {
-    background: var(--border);
-    color: var(--muted);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 2px 7px;
-    border-radius: 10px;
-  }
-
-  .search-box {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .search-box input {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 10px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
-  .search-box input:focus { border-color: var(--accent); }
-  .search-box input::placeholder { color: var(--muted); }
-
-  .filter-row {
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .filter-btn {
-    font-size: 11px;
-    font-family: var(--mono);
-    padding: 3px 9px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .filter-btn.active {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: rgba(79,142,247,0.08);
-  }
-
-  #file-list {
-    flex: 1;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  .file-item {
-    display: flex;
-    align-items: center;
-    padding: 9px 14px;
-    gap: 10px;
-    border-bottom: 1px solid rgba(30,35,48,0.5);
-    cursor: pointer;
-    transition: background 0.12s;
-    position: relative;
-  }
-
-  .file-item:hover { background: rgba(79,142,247,0.05); }
-  .file-item.selected { background: rgba(79,142,247,0.1); }
-  .file-item.modified { border-left: 2px solid var(--warn); }
-
-  .file-icon {
-    width: 28px; height: 28px;
-    border-radius: 5px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px;
-    flex-shrink: 0;
-  }
-
-  .icon-3d { background: rgba(124,92,252,0.15); color: var(--accent2); }
-  .icon-data { background: rgba(247,184,79,0.15); color: var(--warn); }
-  .icon-img { background: rgba(41,216,132,0.15); color: var(--success); }
-  .icon-audio { background: rgba(247,90,90,0.15); color: var(--danger); }
-  .icon-other { background: rgba(100,116,139,0.15); color: var(--muted); }
-
-  .file-item-info { flex: 1; min-width: 0; }
-
-  .file-item-name {
-    font-family: var(--mono);
-    font-size: 11px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--text);
-  }
-
-  .file-item-meta {
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
-  .mod-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--warn);
-    flex-shrink: 0;
-  }
-
-  /* MAIN PANEL */
-  .main-panel {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .toolbar {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: var(--surface);
-    flex-wrap: wrap;
-  }
-
-  .toolbar h3 {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text);
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .detail-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  .empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: 10px;
-    color: var(--muted);
-    text-align: center;
-  }
-
-  .empty-state .big-icon { font-size: 48px; opacity: 0.3; }
-  .empty-state p { font-size: 13px; }
-
-  .asset-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-    max-width: 680px;
-  }
-
-  .asset-card-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .asset-card-header .big-file-icon {
-    width: 42px; height: 42px;
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-  }
-
-  .asset-card-header h4 {
-    font-family: var(--mono);
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  .asset-card-header .path {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 2px;
-  }
-
-  .meta-grid {
-    padding: 16px 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .meta-item label {
-    font-size: 11px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-family: var(--mono);
-    display: block;
-    margin-bottom: 3px;
-  }
-
-  .meta-item .val {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text);
-  }
-
-  .action-area {
-    padding: 16px 20px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  /* Replace modal overlay */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .modal-overlay.show { display: flex; }
-
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    width: 480px;
-    max-width: 95vw;
-    overflow: hidden;
-  }
-
-  .modal-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .modal-header h3 {
-    font-size: 14px;
-    font-weight: 600;
-    flex: 1;
-  }
-
-  .modal-body { padding: 20px; }
-
-  .modal-footer {
-    padding: 14px 20px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .replace-drop {
-    border: 1.5px dashed var(--border);
-    border-radius: 8px;
-    padding: 28px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.15s;
-    margin-bottom: 14px;
-  }
-
-  .replace-drop:hover { border-color: var(--accent); }
-  .replace-drop input { display: none; }
-  .replace-drop .small-icon { font-size: 24px; margin-bottom: 6px; }
-  .replace-drop p { font-size: 12px; color: var(--muted); }
-  .replace-drop p strong { color: var(--accent); }
-
-  #replace-file-name {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--success);
-    margin-top: 6px;
-    display: none;
-  }
-
-  /* Progress bar */
-  .progress-bar-wrap {
-    display: none;
-    margin-top: 14px;
-  }
-
-  .progress-bar-wrap.show { display: block; }
-
-  .progress-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 6px;
-  }
-
-  .progress-bar {
-    height: 4px;
-    background: var(--border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    border-radius: 4px;
-    transition: width 0.2s;
-    width: 0%;
-  }
-
-  /* Toast */
-  .toast-container {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 200;
-  }
-
-  .toast {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 11px 16px;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    animation: slideIn 0.2s ease;
-    max-width: 320px;
-  }
-
-  .toast.success { border-color: rgba(41,216,132,0.4); }
-  .toast.error { border-color: rgba(247,90,90,0.4); }
-  .toast.info { border-color: rgba(79,142,247,0.4); }
-
-  @keyframes slideIn {
-    from { transform: translateX(40px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-
-  /* Scrollbars */
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-  .loading-spinner {
-    display: inline-block;
-    width: 14px; height: 14px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    vertical-align: middle;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  @media (max-width: 700px) {
-    main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
-    .sidebar { max-height: 280px; }
-  }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0a0c10;
+  --surface:#11141a;
+  --surface2:#181c24;
+  --border:#1e2433;
+  --border2:#252d3d;
+  --accent:#4f8ef7;
+  --accent2:#7c5cfc;
+  --success:#22d47e;
+  --warn:#f7b84f;
+  --danger:#f75a5a;
+  --text:#e2e8f0;
+  --text2:#94a3b8;
+  --text3:#4a5568;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Inter',sans-serif;
+  --radius:10px;
+  --radius-sm:6px;
+  --shadow:0 4px 24px rgba(0,0,0,.45);
+}
+
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── HEADER ── */
+header{
+  padding:12px 20px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  display:flex;align-items:center;gap:12px;
+  flex-shrink:0;z-index:10;
+}
+.logo{
+  width:32px;height:32px;border-radius:8px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.header-title{font-family:var(--mono);font-size:14px;font-weight:600;white-space:nowrap}
+.header-title span{font-size:11px;color:var(--text3);margin-left:4px}
+.header-badge{
+  margin-left:auto;background:rgba(79,142,247,.1);color:var(--accent);
+  font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:20px;
+  border:1px solid rgba(79,142,247,.2);white-space:nowrap;flex-shrink:0;
+}
+
+/* ── DROP BAR ── */
+.drop-bar{
+  padding:12px 20px;border-bottom:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;
+  gap:10px;flex-wrap:wrap;flex-shrink:0;
+}
+#dropzone{
+  flex:1;min-width:180px;border:1.5px dashed var(--border2);border-radius:var(--radius);
+  padding:14px 18px;cursor:pointer;transition:.2s;display:flex;
+  align-items:center;gap:12px;
+}
+#dropzone:hover,#dropzone.dragover{border-color:var(--accent);background:rgba(79,142,247,.04)}
+.drop-icon-sm{font-size:20px;flex-shrink:0}
+.drop-hint{font-size:12px;color:var(--text2)}
+.drop-hint strong{color:var(--accent)}
+.drop-selected{font-family:var(--mono);font-size:12px;color:var(--success);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#file-input{display:none}
+
+.file-info-pill{
+  display:none;align-items:center;gap:8px;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:var(--radius);padding:8px 12px;flex-shrink:0;
+}
+.fip-name{font-family:var(--mono);font-size:11px;color:var(--text);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fip-meta{font-size:10px;color:var(--text2)}
+.fip-badge{
+  background:rgba(34,212,126,.12);color:var(--success);
+  font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:20px;
+  border:1px solid rgba(34,212,126,.2);white-space:nowrap;
+}
+
+.btn{
+  font-family:var(--sans);font-size:12px;font-weight:500;
+  padding:8px 14px;border-radius:var(--radius-sm);border:none;
+  cursor:pointer;transition:.15s;white-space:nowrap;display:flex;
+  align-items:center;gap:5px;flex-shrink:0;
+}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-ghost.active-mode{border-color:var(--warn);color:var(--warn)}
+.btn-success{background:rgba(34,212,126,.12);color:var(--success);border:1px solid rgba(34,212,126,.25)}
+.btn-danger{background:rgba(247,90,90,.1);color:var(--danger);border:1px solid rgba(247,90,90,.2)}
+.btn-icon{padding:8px;border-radius:var(--radius-sm)}
+
+/* ── LAYOUT ── */
+.app-body{
+  flex:1;display:grid;
+  grid-template-columns:280px 1fr;
+  overflow:hidden;
+}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sidebar-head{
+  padding:12px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;flex-shrink:0;
+}
+.sidebar-head h2{font-size:11px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:.08em;flex:1}
+.count-badge{
+  background:var(--border);color:var(--text2);font-family:var(--mono);
+  font-size:10px;padding:2px 7px;border-radius:10px;
+}
+.search-wrap{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.search-wrap input{
+  width:100%;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:7px 10px 7px 30px;
+  color:var(--text);font-family:var(--mono);font-size:12px;outline:none;
+  transition:.15s;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:9px center;
+}
+.search-wrap input:focus{border-color:var(--accent)}
+.search-wrap input::placeholder{color:var(--text3)}
+
+.filter-row{
+  padding:8px 12px;border-bottom:1px solid var(--border);
+  display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0;
+}
+.filter-btn{
+  font-size:10px;font-family:var(--mono);padding:3px 8px;
+  border-radius:20px;border:1px solid var(--border);
+  background:transparent;color:var(--text2);cursor:pointer;transition:.15s;
+}
+.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(79,142,247,.08)}
+
+#file-list{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+
+.file-item{
+  display:flex;align-items:center;padding:9px 12px;gap:9px;
+  border-bottom:1px solid rgba(30,36,51,.6);cursor:pointer;transition:.1s;
+  position:relative;
+}
+.file-item:hover{background:rgba(79,142,247,.05)}
+.file-item.selected{background:rgba(79,142,247,.1)}
+.file-item.modified{border-left:2px solid var(--warn);padding-left:10px}
+.file-icon{
+  width:28px;height:28px;border-radius:5px;display:flex;align-items:center;
+  justify-content:center;font-size:13px;flex-shrink:0;
+}
+.icon-3d{background:rgba(124,92,252,.15);color:var(--accent2)}
+.icon-data{background:rgba(247,184,79,.12);color:var(--warn)}
+.icon-img{background:rgba(34,212,126,.12);color:var(--success)}
+.icon-audio{background:rgba(247,90,90,.1);color:var(--danger)}
+.icon-other{background:rgba(100,116,139,.1);color:var(--text2)}
+.file-item-info{flex:1;min-width:0}
+.file-item-name{font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.file-item-meta{font-size:10px;color:var(--text2);margin-top:1px}
+.mod-dot{width:5px;height:5px;border-radius:50%;background:var(--warn);flex-shrink:0}
+
+/* ── MAIN PANEL ── */
+.main-panel{display:flex;flex-direction:column;overflow:hidden}
+.toolbar{
+  padding:10px 18px;border-bottom:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;gap:8px;
+  flex-wrap:wrap;flex-shrink:0;
+}
+.toolbar-title{font-family:var(--mono);font-size:12px;color:var(--text);flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.detail-area{flex:1;overflow-y:auto;padding:20px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:10px;color:var(--text2);text-align:center;
+}
+.empty-icon{font-size:44px;opacity:.25;margin-bottom:4px}
+
+/* ── ASSET CARD ── */
+.asset-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;max-width:640px}
+.card-head{
+  padding:16px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+}
+.card-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.card-head h4{font-family:var(--mono);font-size:13px;font-weight:600;line-break:anywhere}
+.card-head .card-path{font-size:10px;color:var(--text2);margin-top:2px;word-break:break-all}
+.card-badge{margin-left:auto;flex-shrink:0;
+  background:rgba(247,184,79,.12);color:var(--warn);font-size:10px;
+  font-family:var(--mono);padding:2px 8px;border-radius:20px;
+  border:1px solid rgba(247,184,79,.25)}
+
+.meta-grid{padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;border-bottom:1px solid var(--border)}
+.meta-item label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);display:block;margin-bottom:2px}
+.meta-item .val{font-family:var(--mono);font-size:12px;color:var(--text)}
+.meta-full{grid-column:1/-1}
+
+.action-row{padding:14px 18px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── MODALS ── */
+.overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  z-index:200;align-items:center;justify-content:center;padding:16px;
+}
+.overlay.show{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);width:100%;max-width:460px;overflow:hidden;
+  box-shadow:var(--shadow);
+}
+.modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.modal-head h3{font-size:14px;font-weight:600;flex:1}
+.modal-body{padding:18px}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+.replace-drop{
+  border:1.5px dashed var(--border2);border-radius:var(--radius-sm);
+  padding:24px;text-align:center;cursor:pointer;transition:.15s;margin-bottom:12px;
+}
+.replace-drop:hover{border-color:var(--accent)}
+.replace-drop p{font-size:12px;color:var(--text2);margin-top:4px}
+.replace-drop strong{color:var(--accent)}
+#replace-chosen{font-family:var(--mono);font-size:11px;color:var(--success);margin-top:6px;display:none}
+
+/* ── PROGRESS MODAL ── */
+.prog-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  width:100%;max-width:380px;padding:24px;box-shadow:var(--shadow)}
+.prog-title{font-size:14px;font-weight:600;margin-bottom:16px}
+.prog-label{font-family:var(--mono);font-size:11px;color:var(--text2);margin-bottom:8px}
+.prog-bar{height:4px;background:var(--border);border-radius:4px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .15s;width:0%}
+.prog-sub{font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono);min-height:16px}
+
+/* ── TOASTS ── */
+.toast-wrap{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:500;pointer-events:none}
+.toast{
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;
+  box-shadow:var(--shadow);animation:toastIn .2s ease;max-width:300px;
+}
+.toast.success{border-color:rgba(34,212,126,.35)}
+.toast.error{border-color:rgba(247,90,90,.35)}
+.toast.info{border-color:rgba(79,142,247,.35)}
+@keyframes toastIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── DIAG PRE ── */
+.diag-pre{
+  font-family:var(--mono);font-size:10px;color:var(--text);
+  background:var(--bg);padding:14px;border-radius:var(--radius-sm);
+  overflow:auto;white-space:pre;max-height:420px;line-height:1.6;
+  border:1px solid var(--border);
+}
+
+/* ── SCROLLBARS ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* ── MOBILE BOTTOM SHEET SIDEBAR ── */
+.sidebar-toggle{
+  display:none;position:fixed;bottom:16px;left:16px;z-index:100;
+  width:44px;height:44px;border-radius:50%;padding:0;justify-content:center;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff;border:none;font-size:20px;box-shadow:var(--shadow);
+}
+.sidebar-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;
+}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  body{overflow:auto}
+  .app-body{grid-template-columns:1fr;overflow:visible}
+
+  .header-title span{display:none}
+  .header-badge{display:none}
+
+  .drop-bar{gap:8px}
+  #dropzone{min-width:0}
+  .drop-hint{display:none}
+  .drop-selected{max-width:120px}
+
+  .file-info-pill{display:none!important}
+  .btn span.btn-label{display:none}
+
+  .sidebar{
+    position:fixed;left:0;bottom:0;width:100%;max-height:70vh;
+    z-index:95;border-right:none;border-top:1px solid var(--border);
+    transform:translateY(100%);transition:transform .25s ease;border-radius:16px 16px 0 0;
+  }
+  .sidebar.open{transform:translateY(0)}
+  .sidebar-overlay.show{display:block}
+  .sidebar-toggle{display:flex}
+
+  .main-panel{min-height:calc(100vh - 120px)}
+  .detail-area{padding:12px}
+
+  .asset-card{max-width:100%}
+  .meta-grid{grid-template-columns:1fr 1fr}
+
+  .action-row{gap:6px}
+  .action-row .btn{font-size:11px;padding:7px 10px}
+
+  .toolbar{padding:8px 12px}
+  .toolbar .btn{padding:6px 10px;font-size:11px}
+}
+
+@media(min-width:769px) and (max-width:1100px){
+  .app-body{grid-template-columns:240px 1fr}
+}
+
+@media(min-width:1400px){
+  .app-body{grid-template-columns:320px 1fr}
+}
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">📦</div>
-  <h1>OBB Asset Editor <span>v2.0</span></h1>
-  <div class="badge">Local · No Upload · 3 GB</div>
+  <div class="header-title">OBB Asset Editor <span>v3.0</span></div>
+  <div class="header-badge">Local · No Upload · 3 GB</div>
 </header>
 
-<main>
-  <!-- DROP PANEL -->
-  <div class="drop-panel">
-    <div id="dropzone">
-    <input type="file" id="file-input" accept=".obb,.zip">
-      <div class="drop-icon">📂</div>
-      <div class="drop-text">
-        Drop your <strong onclick="document.getElementById('file-input').click()">.obb file here</strong> or click to browse
-      </div>
+<!-- DROP BAR -->
+<div class="drop-bar">
+  <div id="dropzone">
+    <span class="drop-icon-sm">📂</span>
+    <div class="drop-hint">Drop <strong>.obb</strong> here or <strong>tap to browse</strong></div>
+    <div class="drop-selected" id="drop-selected" style="display:none"></div>
+  </div>
+  <input type="file" id="file-input" accept=".obb,.zip">
+
+  <div class="file-info-pill" id="file-info-pill">
+    <div>
+      <div class="fip-name" id="fip-name">—</div>
+      <div class="fip-meta" id="fip-meta">—</div>
     </div>
-    <div id="file-info">
-      <div class="file-name" id="fi-name">—</div>
-      <div class="file-meta" id="fi-meta">—</div>
-      <span class="pill" id="fi-count">0 files</span>
-    </div>
-    <button class="btn btn-primary" id="export-btn" disabled onclick="exportOBB()">⬇ Export OBB</button>
-    <button class="btn btn-ghost" id="compress-toggle" onclick="toggleCompression()" title="Toggle compression mode">⚡ STORE</button>
-    <button class="btn btn-ghost" id="reset-btn" disabled onclick="resetAll()">✕ Reset</button>
-    <button class="btn btn-ghost" id="diag-btn" onclick="diagnoseFile()" title="Diagnose file format">🔍 Diagnose</button>
+    <span class="fip-badge" id="fip-count">0 files</span>
   </div>
 
+  <button class="btn btn-primary" id="export-btn" disabled onclick="exportOBB()">
+    ⬇ <span class="btn-label">Export OBB</span>
+  </button>
+  <button class="btn btn-ghost" id="compress-btn" onclick="toggleCompression()" title="Toggle compression">
+    ⚡ <span class="btn-label">STORE</span>
+  </button>
+  <button class="btn btn-ghost" id="diag-btn" onclick="diagnoseFile()" title="Diagnose format">🔍</button>
+  <button class="btn btn-ghost" id="reset-btn" disabled onclick="resetAll()" title="Reset">✕</button>
+</div>
+
+<!-- APP BODY -->
+<div class="app-body">
+
   <!-- SIDEBAR -->
-  <div class="sidebar">
-    <div class="sidebar-header">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-head">
       <h2>Contents</h2>
       <span class="count-badge" id="visible-count">0</span>
     </div>
-    <div class="search-box">
+    <div class="search-wrap">
       <input type="text" id="search-input" placeholder="Search files…" oninput="filterFiles()">
     </div>
     <div class="filter-row" id="filter-row">
-      <button class="filter-btn active" data-ext="all" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
     </div>
     <div id="file-list"></div>
   </div>
 
   <!-- MAIN PANEL -->
   <div class="main-panel">
-    <div class="toolbar">
-      <h3 id="panel-title">Select a file from the list</h3>
-      <button class="btn btn-ghost" id="dl-btn" style="display:none" onclick="downloadSelected()">⬇ Download</button>
-      <button class="btn btn-primary" id="replace-btn" style="display:none" onclick="openReplaceModal()">↺ Replace</button>
+    <div class="toolbar" id="toolbar" style="display:none">
+      <div class="toolbar-title" id="toolbar-title">—</div>
+      <button class="btn btn-ghost" id="dl-btn" onclick="downloadSelected()">⬇ <span class="btn-label">Download</span></button>
+      <button class="btn btn-primary" id="rep-btn" onclick="openReplaceModal()">↺ <span class="btn-label">Replace</span></button>
     </div>
     <div class="detail-area" id="detail-area">
       <div class="empty-state">
-        <div class="big-icon">🗂️</div>
-        <p>Load an OBB file to get started.<br>All processing happens locally in your browser.</p>
+        <div class="empty-icon">🗂️</div>
+        <p style="font-size:13px;font-weight:500">Load an OBB file to get started</p>
+        <p style="font-size:12px;color:var(--text3)">All processing is 100% local — nothing is uploaded</p>
       </div>
     </div>
   </div>
-</main>
+</div>
+
+<!-- Mobile sidebar toggle -->
+<button class="sidebar-toggle btn" id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- REPLACE MODAL -->
-<div class="modal-overlay" id="replace-modal">
+<div class="overlay" id="replace-modal">
   <div class="modal">
-    <div class="modal-header">
+    <div class="modal-head">
       <span>↺</span>
       <h3>Replace Asset</h3>
-      <button class="btn btn-ghost" style="padding:4px 10px" onclick="closeReplaceModal()">✕</button>
+      <button class="btn btn-ghost btn-icon" onclick="closeReplaceModal()">✕</button>
     </div>
     <div class="modal-body">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      <p style="font-size:11px;color:var(--text2);margin-bottom:12px">
         Replacing: <span id="replace-target" style="color:var(--text);font-family:var(--mono)"></span>
       </p>
-      <div class="replace-drop" id="replace-drop" onclick="document.getElementById('replace-input').click()">
-        <input type="file" id="replace-input" onchange="onReplaceFileChosen(this)">
-        <div class="small-icon">📁</div>
-        <p>Click to choose replacement file</p>
+      <div class="replace-drop" onclick="document.getElementById('replace-input').click()">
+        <input type="file" id="replace-input" style="display:none" onchange="onReplaceChosen(this)">
+        <div style="font-size:22px">📁</div>
+        <p>Tap to choose replacement file</p>
         <p><strong>Any file type accepted</strong></p>
       </div>
-      <div id="replace-file-name"></div>
+      <div id="replace-chosen"></div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeReplaceModal()">Cancel</button>
-      <button class="btn btn-primary" id="confirm-replace-btn" disabled onclick="confirmReplace()">Confirm Replace</button>
+      <button class="btn btn-primary" id="confirm-rep-btn" disabled onclick="confirmReplace()">Confirm Replace</button>
     </div>
   </div>
 </div>
 
 <!-- PROGRESS MODAL -->
-<div class="modal-overlay" id="progress-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3 id="progress-title">Processing…</h3>
-    </div>
-    <div class="modal-body">
-      <div class="progress-bar-wrap show">
-        <div class="progress-label" id="progress-label">Loading…</div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="progress-fill"></div>
-        </div>
-      </div>
-    </div>
+<div class="overlay" id="prog-overlay">
+  <div class="prog-modal">
+    <div class="prog-title" id="prog-title">Processing…</div>
+    <div class="prog-label" id="prog-label">Please wait…</div>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="prog-sub" id="prog-sub"></div>
   </div>
 </div>
 
-<div class="toast-container" id="toast-container"></div>
+<div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
-// ─────────────────────────────────────────────────────────────────────────────
-// CUSTOM ZIP ENGINE — never loads the full file into RAM
-// Reads Central Directory only (~last 64 KB), then slices on demand.
-// Supports ZIP32, ZIP64, STORE and DEFLATE entries up to 3 GB.
-// ─────────────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let obbFile         = null;
+let allFiles        = [];
+let filteredFiles   = [];
+let selectedPath    = null;
+let modifications   = {};
+let pendingReplace  = null;
+let activeFilter    = 'all';
+let useCompression  = false;
 
-let obbFile    = null;   // original File object (never fully read)
-let allFiles   = [];     // array of ZipEntry objects
-let filteredFiles = [];
-let selectedFile  = null;
-let modifications = {};  // path → { file: File, name, size }
-let pendingReplaceFile = null;
-let activeFilter = 'all';
-let useCompression = false;
-
-// ── ZipEntry: metadata only, extract on demand via File.slice ──
-class ZipEntry {
-  constructor(path, compMethod, compSize, uncompSize, dataOffset, crc32) {
-    this.path        = path;
-    this.compMethod  = compMethod;   // 0=STORE, 8=DEFLATE
-    this.compSize    = compSize;
-    this.size        = uncompSize;
-    this.dataOffset  = dataOffset;   // byte offset of compressed data in file
-    this.crc32       = crc32;
-  }
-
-  // Read compressed bytes by slicing the original File — no full-file load
-  async readCompressed() {
-    const slice = obbFile.slice(this.dataOffset, this.dataOffset + this.compSize);
-    return new Uint8Array(await slice.arrayBuffer());
-  }
-
-  // Decompress and return Uint8Array of original data
-  async decompress() {
-    const comp = await this.readCompressed();
-    if (this.compMethod === 0) return comp; // STORE — already raw
-    // DEFLATE: wrap in a proper gzip stream and use DecompressionStream
-    const ds = new DecompressionStream('deflate-raw');
-    const writer = ds.writable.getWriter();
-    writer.write(comp);
-    writer.close();
-    const chunks = [];
-    const reader = ds.readable.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-    }
-    const total = chunks.reduce((s, c) => s + c.length, 0);
-    const out = new Uint8Array(total);
-    let pos = 0;
-    for (const c of chunks) { out.set(c, pos); pos += c.length; }
-    return out;
-  }
-
-  async toBlob(mimeType) {
-    const data = await this.decompress();
-    return new Blob([data], { type: mimeType || 'application/octet-stream' });
-  }
+// ════════════════════════════════════════════════════════
+// UTILITIES
+// ════════════════════════════════════════════════════════
+function readU16(dv,o){return dv.getUint16(o,true)}
+function readU32(dv,o){return dv.getUint32(o,true)}
+function readU64(dv,o){
+  var lo=dv.getUint32(o,true),hi=dv.getUint32(o+4,true);
+  return hi*0x100000000+lo;
+}
+function setU64(dv,o,v){
+  dv.setUint32(o,v>>>0,true);
+  dv.setUint32(o+4,Math.floor(v/0x100000000)>>>0,true);
 }
 
-// ── Read a little-endian integer from a DataView ──
-function readU16(dv, off) { return dv.getUint16(off, true); }
-function readU32(dv, off) { return dv.getUint32(off, true); }
-function readU64(dv, off) {
-  const lo = dv.getUint32(off, true);
-  const hi = dv.getUint32(off + 4, true);
-  return hi * 0x100000000 + lo;
+function formatSize(b){
+  if(!b||b<0)return '0 B';
+  if(b<1024)return b+' B';
+  if(b<1048576)return (b/1024).toFixed(1)+' KB';
+  if(b<1073741824)return (b/1048576).toFixed(2)+' MB';
+  return (b/1073741824).toFixed(3)+' GB';
 }
 
-// ── Parse ZIP Central Directory from a File object ──
-async function parseZipCentralDirectory(file) {
-  const EOCD_SIG    = 0x06054b50;
-  const EOCD64_SIG  = 0x06064b50;
-  const CD_SIG      = 0x02014b50;
-  const LFH_SIG     = 0x04034b50;
+const CRC_TBL=(function(){
+  var t=new Uint32Array(256);
+  for(var i=0;i<256;i++){var c=i;for(var j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[i]=c;}
+  return t;
+})();
+function crc32(data){
+  var c=0xFFFFFFFF;
+  for(var i=0;i<data.length;i++)c=CRC_TBL[(c^data[i])&0xFF]^(c>>>8);
+  return(c^0xFFFFFFFF)>>>0;
+}
 
-  // ── Strategy 1: scan last 1 MB for EOCD (handles large comments + APK signing blocks)
-  const scanSize = Math.min(1 * 1024 * 1024, file.size);
-  setProgress(5, `Scanning last ${formatSize(scanSize)} for EOCD signature…`);
-  const tailBuf = await file.slice(file.size - scanSize).arrayBuffer();
-  const tailDV  = new DataView(tailBuf);
+// ════════════════════════════════════════════════════════
+// ZIP ENTRY CLASS
+// ════════════════════════════════════════════════════════
+function ZipEntry(path,method,compSize,uncompSize,dataOffset,crc){
+  this.path=path;
+  this.compMethod=method;
+  this.compSize=compSize;
+  this.size=uncompSize;
+  this.dataOffset=dataOffset;
+  this.crc=crc;
+}
+ZipEntry.prototype.readCompressed=async function(){
+  var sl=obbFile.slice(this.dataOffset,this.dataOffset+this.compSize);
+  return new Uint8Array(await sl.arrayBuffer());
+};
+ZipEntry.prototype.decompress=async function(){
+  var comp=await this.readCompressed();
+  if(this.compMethod===0)return comp;
+  var ds=new DecompressionStream('deflate-raw');
+  var w=ds.writable.getWriter();
+  w.write(comp);w.close();
+  var chunks=[],reader=ds.readable.getReader();
+  while(true){var r=await reader.read();if(r.done)break;chunks.push(r.value);}
+  var total=chunks.reduce(function(s,c){return s+c.length;},0);
+  var out=new Uint8Array(total),pos=0;
+  chunks.forEach(function(c){out.set(c,pos);pos+=c.length;});
+  return out;
+};
+ZipEntry.prototype.toBlob=async function(mime){
+  var d=await this.decompress();
+  return new Blob([d],{type:mime||'application/octet-stream'});
+};
 
-  // Scan backwards for EOCD signature (0x504b0506 in little-endian = 0x06054b50)
-  let eocdOff = -1;
-  for (let i = tailBuf.byteLength - 22; i >= 0; i--) {
-    if (tailDV.getUint32(i, true) === EOCD_SIG) {
-      // Validate: comment length field should match remaining bytes
-      const cmtLen = tailDV.getUint16(i + 20, true);
-      if (i + 22 + cmtLen <= tailBuf.byteLength) {
-        eocdOff = i;
-        break;
-      }
-    }
-  }
+// ════════════════════════════════════════════════════════
+// ZIP PARSER — reads only Central Directory (never full file)
+// ════════════════════════════════════════════════════════
+var SIG_EOCD   =0x06054b50;
+var SIG_EOCD64 =0x06064b50;
+var SIG_LOC64  =0x07064b50;
+var SIG_CD     =0x02014b50;
+var SIG_LFH    =0x04034b50;
 
-  // ── Strategy 2: if still not found, scan last 8 MB (very large comment or signing block)
-  if (eocdOff < 0 && file.size > scanSize) {
-    setProgress(10, 'Scanning last 8 MB for EOCD (extended search)…');
-    const bigScan = Math.min(8 * 1024 * 1024, file.size);
-    const bigBuf  = await file.slice(file.size - bigScan).arrayBuffer();
-    const bigDV   = new DataView(bigBuf);
-    for (let i = bigBuf.byteLength - 22; i >= 0; i--) {
-      if (bigDV.getUint32(i, true) === EOCD_SIG) {
-        const cmtLen = bigDV.getUint16(i + 20, true);
-        if (i + 22 + cmtLen <= bigBuf.byteLength) {
-          // rebuild tailDV from this bigger buffer
-          const newTailDV = bigDV;
-          eocdOff = i;
-          // re-assign so the code below uses the right buffer/view
-          Object.assign(tailDV, {}); // won't work directly; use a flag
-          // Use a separate path: re-parse from bigBuf
-          return await _parseCDFromBuffer(file, bigBuf, bigDV, i, file.size - bigScan);
+async function findEOCD(file){
+  // Try progressively larger tail reads until EOCD found
+  var sizes=[65558, 1*1024*1024, 8*1024*1024, 32*1024*1024];
+  for(var si=0;si<sizes.length;si++){
+    var scanSize=Math.min(sizes[si],file.size);
+    setProgress(3+si*3,'Scanning last '+formatSize(scanSize)+'…');
+    var buf=await file.slice(file.size-scanSize).arrayBuffer();
+    var dv=new DataView(buf);
+    for(var i=buf.byteLength-22;i>=0;i--){
+      if(dv.getUint32(i,true)===SIG_EOCD){
+        var cmtLen=dv.getUint16(i+20,true);
+        if(i+22+cmtLen<=buf.byteLength){
+          return {buf:buf,dv:dv,eocdOff:i,baseOff:file.size-scanSize};
         }
       }
     }
   }
-
-  if (eocdOff < 0) {
-    // ── Strategy 3: check if file starts with PK (LFH) but EOCD is missing/corrupt
-    const headBuf = await file.slice(0, 4).arrayBuffer();
-    const headSig = new DataView(headBuf).getUint32(0, true);
-    if (headSig === LFH_SIG) {
-      throw new Error('ZIP structure found but EOCD is missing or beyond 8 MB from end. File may be corrupt or use an unsupported format.');
-    }
-    // Dump first 8 bytes as hex for diagnosis
-    const diagBuf = await file.slice(0, 8).arrayBuffer();
-    const diagArr = new Uint8Array(diagBuf);
-    const hex = Array.from(diagArr).map(b => b.toString(16).padStart(2,'0')).join(' ');
-    throw new Error(`Not a valid ZIP/OBB file. First bytes: ${hex}`);
+  // Not found — check if it even starts with PK
+  var hd=new Uint8Array(await file.slice(0,8).arrayBuffer());
+  var hdv=new DataView(hd.buffer);
+  var sig=hdv.getUint32(0,true);
+  if(sig===SIG_LFH){
+    throw new Error('Valid ZIP start (PK\\x03\\x04) found but EOCD not in last 32 MB. File may be truncated or corrupt.');
   }
-
-  return await _parseCDFromBuffer(file, tailBuf, tailDV, eocdOff, file.size - scanSize);
+  var hex=Array.from(hd).map(function(b){return b.toString(16).padStart(2,'0');}).join(' ');
+  throw new Error('Not a ZIP/OBB file. First 8 bytes: '+hex);
 }
 
-async function _parseCDFromBuffer(file, buf, dv, eocdOff, bufBaseOffset) {
-  const EOCD64_SIG = 0x06064b50;
-  const CD_SIG     = 0x02014b50;
-  const LFH_SIG    = 0x04034b50;
+async function parseZip(file){
+  var found=await findEOCD(file);
+  var dv=found.dv,eocdOff=found.eocdOff,baseOff=found.baseOff;
+  var fileEocdOff=baseOff+eocdOff;
 
-  const fileEocdOff = bufBaseOffset + eocdOff;
+  var cdOff,cdSize,totalEntries;
+  var e32=readU16(dv,eocdOff+10);
+  var sz32=readU32(dv,eocdOff+12);
+  var off32=readU32(dv,eocdOff+16);
 
-  let cdOffset, cdSize, totalEntries;
-
-  const eocd32Entries = dv.getUint16(eocdOff + 10, true);
-  const eocd32CDSize  = dv.getUint32(eocdOff + 12, true);
-  const eocd32CDOff   = dv.getUint32(eocdOff + 16, true);
-
-  if (eocd32CDOff === 0xFFFFFFFF || eocd32Entries === 0xFFFF || eocd32CDSize === 0xFFFFFFFF) {
-    // ZIP64 — locator is exactly 20 bytes before EOCD
-    const loc64AbsOff = fileEocdOff - 20;
-    if (loc64AbsOff < 0) throw new Error('ZIP64 locator position is invalid');
-    const loc64Buf = await file.slice(loc64AbsOff, loc64AbsOff + 20).arrayBuffer();
-    const loc64DV  = new DataView(loc64Buf);
-    const loc64Sig = loc64DV.getUint32(0, true);
-    if (loc64Sig !== 0x07064b50) throw new Error('ZIP64 locator signature not found (got 0x' + loc64Sig.toString(16) + ')');
-    const eocd64AbsOff = readU64(loc64DV, 8);
-    const eocd64Buf    = await file.slice(eocd64AbsOff, eocd64AbsOff + 56).arrayBuffer();
-    const eocd64DV     = new DataView(eocd64Buf);
-    if (readU32(eocd64DV, 0) !== EOCD64_SIG) throw new Error('ZIP64 EOCD signature mismatch');
-    totalEntries = readU64(eocd64DV, 32);
-    cdSize       = readU64(eocd64DV, 40);
-    cdOffset     = readU64(eocd64DV, 48);
+  if(off32===0xFFFFFFFF||e32===0xFFFF||sz32===0xFFFFFFFF){
+    // ZIP64
+    var l64abs=fileEocdOff-20;
+    if(l64abs<0)throw new Error('ZIP64 locator position invalid');
+    var l64buf=await file.slice(l64abs,l64abs+20).arrayBuffer();
+    var l64dv=new DataView(l64buf);
+    if(l64dv.getUint32(0,true)!==SIG_LOC64)
+      throw new Error('ZIP64 locator sig missing (got 0x'+l64dv.getUint32(0,true).toString(16)+')');
+    var e64abs=readU64(l64dv,8);
+    var e64buf=await file.slice(e64abs,e64abs+56).arrayBuffer();
+    var e64dv=new DataView(e64buf);
+    if(readU32(e64dv,0)!==SIG_EOCD64)throw new Error('ZIP64 EOCD sig mismatch');
+    totalEntries=readU64(e64dv,32);
+    cdSize=readU64(e64dv,40);
+    cdOff=readU64(e64dv,48);
   } else {
-    totalEntries = eocd32Entries;
-    cdSize       = eocd32CDSize;
-    cdOffset     = eocd32CDOff;
+    totalEntries=e32; cdSize=sz32; cdOff=off32;
   }
 
-  if (cdOffset >= file.size) throw new Error(`Central Directory offset (${cdOffset}) exceeds file size (${file.size}). File may be corrupt.`);
+  if(cdOff>=file.size)throw new Error('CD offset ('+cdOff+') > file size ('+file.size+'). Corrupt?');
+  setProgress(18,'Reading Central Directory ('+formatSize(cdSize)+')…');
+  var cdbuf=await file.slice(cdOff,cdOff+cdSize).arrayBuffer();
+  var cddv=new DataView(cdbuf);
 
-  setProgress(20, `Reading Central Directory… ${formatSize(cdSize)}`);
-  const cdBuf = await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer();
-  const cdDV  = new DataView(cdBuf);
+  var entries=[],pos=0,parsed=0,estTotal=totalEntries||1;
+  while(pos+46<=cdbuf.byteLength){
+    if(cddv.getUint32(pos,true)!==SIG_CD)break;
+    var method=readU16(cddv,pos+10);
+    var compSz=readU32(cddv,pos+20);
+    var uncompSz=readU32(cddv,pos+24);
+    var lOff=readU32(cddv,pos+42);
+    var crc=readU32(cddv,pos+16);
+    var fnLen=readU16(cddv,pos+28);
+    var exLen=readU16(cddv,pos+30);
+    var cmLen=readU16(cddv,pos+32);
+    var extAttr=readU32(cddv,pos+38);
 
-  const entries = [];
-  let pos = 0;
-  let parsed = 0;
-  const estTotal = totalEntries || 1;
+    if(pos+46+fnLen>cdbuf.byteLength)break;
+    var fnBytes=new Uint8Array(cdbuf,pos+46,fnLen);
+    var path=new TextDecoder('utf-8').decode(fnBytes);
 
-  while (pos + 46 <= cdBuf.byteLength) {
-    const sig = cdDV.getUint32(pos, true);
-    if (sig !== CD_SIG) break;
-
-    const compMethod  = readU16(cdDV, pos + 10);
-    let   compSize    = readU32(cdDV, pos + 20);
-    let   uncompSize  = readU32(cdDV, pos + 24);
-    let   localOff    = readU32(cdDV, pos + 42);
-    const crc32val    = readU32(cdDV, pos + 16);
-    const fnLen       = readU16(cdDV, pos + 28);
-    const extraLen    = readU16(cdDV, pos + 30);
-    const cmtLen      = readU16(cdDV, pos + 32);
-    const extAttribs  = readU32(cdDV, pos + 38);
-
-    if (pos + 46 + fnLen > cdBuf.byteLength) break;
-    const fnBytes = new Uint8Array(cdBuf, pos + 46, fnLen);
-    const path    = new TextDecoder('utf-8').decode(fnBytes);
-
-    // ZIP64 extra field resolution
-    if (compSize === 0xFFFFFFFF || uncompSize === 0xFFFFFFFF || localOff === 0xFFFFFFFF) {
-      let exOff = pos + 46 + fnLen;
-      const exEnd = exOff + extraLen;
-      while (exOff + 4 <= exEnd && exOff + 4 <= cdBuf.byteLength) {
-        const tag = readU16(cdDV, exOff);
-        const sz  = readU16(cdDV, exOff + 2);
-        if (tag === 0x0001 && exOff + 4 + sz <= cdBuf.byteLength) {
-          let q = exOff + 4;
-          if (uncompSize === 0xFFFFFFFF && q + 8 <= cdBuf.byteLength) { uncompSize = readU64(cdDV, q); q += 8; }
-          if (compSize   === 0xFFFFFFFF && q + 8 <= cdBuf.byteLength) { compSize   = readU64(cdDV, q); q += 8; }
-          if (localOff   === 0xFFFFFFFF && q + 8 <= cdBuf.byteLength) { localOff   = readU64(cdDV, q); }
+    // ZIP64 extra
+    if(compSz===0xFFFFFFFF||uncompSz===0xFFFFFFFF||lOff===0xFFFFFFFF){
+      var exStart=pos+46+fnLen,exEnd=exStart+exLen;
+      var ep=exStart;
+      while(ep+4<=exEnd&&ep+4<=cdbuf.byteLength){
+        var tag=readU16(cddv,ep),tlen=readU16(cddv,ep+2);
+        if(tag===0x0001){
+          var q=ep+4;
+          if(uncompSz===0xFFFFFFFF&&q+8<=cdbuf.byteLength){uncompSz=readU64(cddv,q);q+=8;}
+          if(compSz===0xFFFFFFFF&&q+8<=cdbuf.byteLength){compSz=readU64(cddv,q);q+=8;}
+          if(lOff===0xFFFFFFFF&&q+8<=cdbuf.byteLength){lOff=readU64(cddv,q);}
           break;
         }
-        exOff += 4 + sz;
+        ep+=4+tlen;
       }
     }
 
-    const isDir = path.endsWith('/') || (extAttribs & 0x10);
-    if (!isDir && fnLen > 0) {
-      // Read LFH to get actual data offset (variable name/extra lengths)
-      try {
-        const lfhBuf = await file.slice(localOff, localOff + 30).arrayBuffer();
-        const lfhDV  = new DataView(lfhBuf);
-        const lfhSig = lfhDV.getUint32(0, true);
-        if (lfhSig === LFH_SIG) {
-          const lfnLen  = readU16(lfhDV, 26);
-          const lexLen  = readU16(lfhDV, 28);
-          const dataOff = localOff + 30 + lfnLen + lexLen;
-          entries.push(new ZipEntry(path, compMethod, compSize, uncompSize, dataOff, crc32val));
+    var isDir=path.endsWith('/')||(extAttr&0x10);
+    if(!isDir&&fnLen>0){
+      try{
+        var lfhbuf=await file.slice(lOff,lOff+30).arrayBuffer();
+        var lfhdv=new DataView(lfhbuf);
+        if(lfhdv.getUint32(0,true)===SIG_LFH){
+          var lfnL=readU16(lfhdv,26),lexL=readU16(lfhdv,28);
+          entries.push(new ZipEntry(path,method,compSz,uncompSz,lOff+30+lfnL+lexL,crc));
         }
-        // silently skip entries with bad LFH
-      } catch(e) { /* skip */ }
+      }catch(e){}
     }
 
-    pos += 46 + fnLen + extraLen + cmtLen;
+    pos+=46+fnLen+exLen+cmLen;
     parsed++;
-
-    if (parsed % 300 === 0) {
-      const pct = 20 + Math.round((parsed / estTotal) * 75);
-      setProgress(Math.min(pct, 94), `Indexed ${parsed.toLocaleString()} / ${estTotal.toLocaleString()} entries…`);
-      await new Promise(r => setTimeout(r, 0));
+    if(parsed%500===0){
+      var pct=18+Math.round((parsed/estTotal)*72);
+      setProgress(Math.min(pct,90),'Indexed '+parsed.toLocaleString()+'/'+estTotal.toLocaleString());
+      await new Promise(function(r){setTimeout(r,0);});
     }
   }
-
   return entries;
 }
 
-// ── Build a new ZIP from scratch (STORE or DEFLATE), streaming into a Blob ──
-async function buildZip(entries, mods, compression) {
-  // We'll accumulate parts as ArrayBuffer/Uint8Array pieces
-  // and build the central directory alongside
-  const parts = [];
-  const cdRecords = [];
-  let offset = 0;
-
-  const enc = new TextEncoder();
-  const totalEntries = entries.length;
-
-  for (let i = 0; i < totalEntries; i++) {
-    const entry = entries[i];
-    const mod   = mods[entry.path];
-
-    // Throttle progress updates
-    if (i % 50 === 0) {
-      const pct = Math.round((i / totalEntries) * 90);
-      setProgress(pct, `Writing ${i}/${totalEntries} — ${entry.path.split('/').pop()}`);
-      await new Promise(r => setTimeout(r, 0));
+// ════════════════════════════════════════════════════════
+// BUILD ZIP (export)
+// ════════════════════════════════════════════════════════
+async function buildZip(entries,mods,compression){
+  var parts=[],cdRecs=[],offset=0,enc=new TextEncoder();
+  var total=entries.length;
+  for(var i=0;i<total;i++){
+    var entry=entries[i],mod=mods[entry.path];
+    if(i%30===0){
+      setProgress(Math.round(i/total*88),'Writing '+i+'/'+total+'…');
+      await new Promise(function(r){setTimeout(r,0);});
     }
-
-    let data; // Uint8Array of uncompressed data
-    let compData; // Uint8Array of data to store
-    let method;
-    let crc;
-
-    if (mod) {
-      // Read replacement file
-      data = new Uint8Array(await mod.file.arrayBuffer());
+    var data=mod?new Uint8Array(await mod.file.arrayBuffer()):await entry.decompress();
+    var crc=crc32(data);
+    var compData,method;
+    if(compression==='DEFLATE'){
+      var cs=new CompressionStream('deflate-raw');
+      var cw=cs.writable.getWriter();cw.write(data);cw.close();
+      var chunks=[],cr=cs.readable.getReader();
+      while(true){var rv=await cr.read();if(rv.done)break;chunks.push(rv.value);}
+      var tlen=chunks.reduce(function(s,c){return s+c.length;},0);
+      compData=new Uint8Array(tlen);var cp=0;
+      chunks.forEach(function(c){compData.set(c,cp);cp+=c.length;});
+      method=8;
     } else {
-      // Read from original OBB
-      data = await entry.decompress();
+      compData=data;method=0;
     }
-
-    // Compute CRC32
-    crc = crc32(data);
-
-    if (compression === 'DEFLATE') {
-      // Compress with DeflateRaw
-      const cs = new CompressionStream('deflate-raw');
-      const writer = cs.writable.getWriter();
-      writer.write(data);
-      writer.close();
-      const chunks = [];
-      const reader = cs.readable.getReader();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-      const total = chunks.reduce((s, c) => s + c.length, 0);
-      compData = new Uint8Array(total);
-      let p = 0;
-      for (const c of chunks) { compData.set(c, p); p += c.length; }
-      method = 8;
-    } else {
-      compData = data;
-      method = 0;
-    }
-
-    const pathBytes   = enc.encode(entry.path);
-    const use64       = offset > 0xFFFFFFFE || data.length > 0xFFFFFFFE || compData.length > 0xFFFFFFFE;
-
-    // Extra field for ZIP64 if needed
-    let extraLFH = new Uint8Array(0);
-    if (use64) {
-      extraLFH = new Uint8Array(20);
-      const dv = new DataView(extraLFH.buffer);
-      dv.setUint16(0, 0x0001, true);
-      dv.setUint16(2, 16, true);
-      setU64(dv, 4, data.length);
-      setU64(dv, 12, compData.length);
-    }
-
-    // Local File Header
-    const lfh = new Uint8Array(30 + pathBytes.length + extraLFH.length);
-    const ldv = new DataView(lfh.buffer);
-    ldv.setUint32(0, 0x04034b50, true);
-    ldv.setUint16(4, use64 ? 45 : 20, true);  // version needed
-    ldv.setUint16(6, 0, true);                  // flags
-    ldv.setUint16(8, method, true);
-    ldv.setUint32(10, 0, true);                 // mod time
-    ldv.setUint32(14, crc, true);
-    ldv.setUint32(18, use64 ? 0xFFFFFFFF : compData.length, true);
-    ldv.setUint32(22, use64 ? 0xFFFFFFFF : data.length, true);
-    ldv.setUint16(26, pathBytes.length, true);
-    ldv.setUint16(28, extraLFH.length, true);
-    lfh.set(pathBytes, 30);
-    lfh.set(extraLFH, 30 + pathBytes.length);
-
-    // Central Directory record for this entry
-    const extraCD = new Uint8Array(use64 ? 28 : 0);
-    if (use64) {
-      const dv = new DataView(extraCD.buffer);
-      dv.setUint16(0, 0x0001, true);
-      dv.setUint16(2, 24, true);
-      setU64(dv, 4, data.length);
-      setU64(dv, 12, compData.length);
-      setU64(dv, 20, offset);
-    }
-
-    const cd = new Uint8Array(46 + pathBytes.length + extraCD.length);
-    const cdv = new DataView(cd.buffer);
-    cdv.setUint32(0, 0x02014b50, true);
-    cdv.setUint16(4, 0x0314, true);  // version made by (Unix, 2.0)
-    cdv.setUint16(6, use64 ? 45 : 20, true);
-    cdv.setUint16(8, 0, true);
-    cdv.setUint16(10, method, true);
-    cdv.setUint32(12, 0, true);
-    cdv.setUint32(16, crc, true);
-    cdv.setUint32(20, use64 ? 0xFFFFFFFF : compData.length, true);
-    cdv.setUint32(24, use64 ? 0xFFFFFFFF : data.length, true);
-    cdv.setUint16(28, pathBytes.length, true);
-    cdv.setUint16(30, extraCD.length, true);
-    cdv.setUint16(32, 0, true);  // comment len
-    cdv.setUint16(34, 0, true);  // disk start
-    cdv.setUint16(36, 0, true);  // int attribs
-    cdv.setUint32(38, 0, true);  // ext attribs
-    cdv.setUint32(42, use64 ? 0xFFFFFFFF : offset, true);
-    cd.set(pathBytes, 46);
-    cd.set(extraCD, 46 + pathBytes.length);
-
-    parts.push(lfh, compData);
-    cdRecords.push(cd);
-    offset += lfh.length + compData.length;
+    var pb=enc.encode(entry.path);
+    var use64=offset>0xFFFFFFFE||data.length>0xFFFFFFFE||compData.length>0xFFFFFFFE;
+    var ex64lfh=use64?new Uint8Array(20):new Uint8Array(0);
+    if(use64){var edv=new DataView(ex64lfh.buffer);edv.setUint16(0,0x0001,true);edv.setUint16(2,16,true);setU64(edv,4,data.length);setU64(edv,12,compData.length);}
+    var lfh=new Uint8Array(30+pb.length+ex64lfh.length);
+    var lv=new DataView(lfh.buffer);
+    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,use64?45:20,true);
+    lv.setUint16(6,0,true);lv.setUint16(8,method,true);lv.setUint32(10,0,true);
+    lv.setUint32(14,crc,true);
+    lv.setUint32(18,use64?0xFFFFFFFF:compData.length,true);
+    lv.setUint32(22,use64?0xFFFFFFFF:data.length,true);
+    lv.setUint16(26,pb.length,true);lv.setUint16(28,ex64lfh.length,true);
+    lfh.set(pb,30);lfh.set(ex64lfh,30+pb.length);
+    var ex64cd=use64?new Uint8Array(28):new Uint8Array(0);
+    if(use64){var cdv2=new DataView(ex64cd.buffer);cdv2.setUint16(0,0x0001,true);cdv2.setUint16(2,24,true);setU64(cdv2,4,data.length);setU64(cdv2,12,compData.length);setU64(cdv2,20,offset);}
+    var cd=new Uint8Array(46+pb.length+ex64cd.length);
+    var cv=new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,0x0314,true);cv.setUint16(6,use64?45:20,true);
+    cv.setUint16(8,0,true);cv.setUint16(10,method,true);cv.setUint32(12,0,true);
+    cv.setUint32(16,crc,true);cv.setUint32(20,use64?0xFFFFFFFF:compData.length,true);
+    cv.setUint32(24,use64?0xFFFFFFFF:data.length,true);cv.setUint16(28,pb.length,true);
+    cv.setUint16(30,ex64cd.length,true);cv.setUint16(32,0,true);cv.setUint16(34,0,true);
+    cv.setUint16(36,0,true);cv.setUint32(38,0,true);
+    cv.setUint32(42,use64?0xFFFFFFFF:offset,true);
+    cd.set(pb,46);cd.set(ex64cd,46+pb.length);
+    parts.push(lfh,compData);cdRecs.push(cd);
+    offset+=lfh.length+compData.length;
   }
-
-  setProgress(92, 'Writing central directory…');
-  await new Promise(r => setTimeout(r, 0));
-
-  // Concatenate CD records
-  const cdSize = cdRecords.reduce((s, c) => s + c.length, 0);
-  const needsZip64 = offset > 0xFFFFFFFE || totalEntries > 0xFFFE || cdSize > 0xFFFFFFFE;
-
-  const cdBuf = new Uint8Array(cdSize);
-  let cdPos = 0;
-  for (const r of cdRecords) { cdBuf.set(r, cdPos); cdPos += r.length; }
-
-  let trailer;
-  if (needsZip64) {
-    // ZIP64 EOCD (56) + ZIP64 EOCD locator (20) + EOCD (22) = 98 bytes
-    trailer = new Uint8Array(98);
-    const tv = new DataView(trailer.buffer);
-    // ZIP64 EOCD
-    tv.setUint32(0, 0x06064b50, true);
-    setU64(tv, 4, 44);               // size of zip64 EOCD record - 12
-    tv.setUint16(12, 0x0314, true);
-    tv.setUint16(14, 45, true);
-    tv.setUint32(16, 0, true);
-    tv.setUint32(20, 0, true);
-    setU64(tv, 24, totalEntries);
-    setU64(tv, 32, totalEntries);
-    setU64(tv, 40, cdSize);
-    setU64(tv, 48, offset);
-    // ZIP64 EOCD locator
-    tv.setUint32(56, 0x07064b50, true);
-    tv.setUint32(60, 0, true);
-    setU64(tv, 64, offset + cdSize);
-    tv.setUint32(72, 1, true);
-    // EOCD
-    tv.setUint32(76, 0x06054b50, true);
-    tv.setUint16(80, 0, true);
-    tv.setUint16(82, 0, true);
-    tv.setUint16(84, Math.min(totalEntries, 0xFFFF), true);
-    tv.setUint16(86, Math.min(totalEntries, 0xFFFF), true);
-    tv.setUint32(88, Math.min(cdSize, 0xFFFFFFFF), true);
-    tv.setUint32(92, Math.min(offset, 0xFFFFFFFF), true);
-    tv.setUint16(96, 0, true);
+  setProgress(92,'Writing central directory…');
+  await new Promise(function(r){setTimeout(r,0);});
+  var cdSize=cdRecs.reduce(function(s,c){return s+c.length;},0);
+  var need64=offset>0xFFFFFFFE||total>0xFFFE||cdSize>0xFFFFFFFE;
+  var cdbuf=new Uint8Array(cdSize),cp2=0;
+  cdRecs.forEach(function(r){cdbuf.set(r,cp2);cp2+=r.length;});
+  var trailer;
+  if(need64){
+    trailer=new Uint8Array(98);var tv=new DataView(trailer.buffer);
+    tv.setUint32(0,0x06064b50,true);setU64(tv,4,44);
+    tv.setUint16(12,0x0314,true);tv.setUint16(14,45,true);
+    tv.setUint32(16,0,true);tv.setUint32(20,0,true);
+    setU64(tv,24,total);setU64(tv,32,total);setU64(tv,40,cdSize);setU64(tv,48,offset);
+    tv.setUint32(56,0x07064b50,true);tv.setUint32(60,0,true);
+    setU64(tv,64,offset+cdSize);tv.setUint32(72,1,true);
+    tv.setUint32(76,0x06054b50,true);tv.setUint16(80,0,true);tv.setUint16(82,0,true);
+    tv.setUint16(84,Math.min(total,0xFFFF),true);tv.setUint16(86,Math.min(total,0xFFFF),true);
+    tv.setUint32(88,Math.min(cdSize,0xFFFFFFFF),true);tv.setUint32(92,Math.min(offset,0xFFFFFFFF),true);
+    tv.setUint16(96,0,true);
   } else {
-    trailer = new Uint8Array(22);
-    const tv = new DataView(trailer.buffer);
-    tv.setUint32(0, 0x06054b50, true);
-    tv.setUint16(4, 0, true);
-    tv.setUint16(6, 0, true);
-    tv.setUint16(8, totalEntries, true);
-    tv.setUint16(10, totalEntries, true);
-    tv.setUint32(12, cdSize, true);
-    tv.setUint32(16, offset, true);
-    tv.setUint16(20, 0, true);
+    trailer=new Uint8Array(22);var tv2=new DataView(trailer.buffer);
+    tv2.setUint32(0,0x06054b50,true);tv2.setUint16(4,0,true);tv2.setUint16(6,0,true);
+    tv2.setUint16(8,total,true);tv2.setUint16(10,total,true);
+    tv2.setUint32(12,cdSize,true);tv2.setUint32(16,offset,true);tv2.setUint16(20,0,true);
   }
-
-  setProgress(97, 'Creating download blob…');
-  await new Promise(r => setTimeout(r, 0));
-
-  return new Blob([...parts, cdBuf, trailer], { type: 'application/zip' });
+  setProgress(97,'Creating blob…');await new Promise(function(r){setTimeout(r,0);});
+  return new Blob(parts.concat([cdbuf,trailer]),{type:'application/zip'});
 }
 
-function setU64(dv, off, val) {
-  const lo = val >>> 0;
-  const hi = Math.floor(val / 0x100000000) >>> 0;
-  dv.setUint32(off, lo, true);
-  dv.setUint32(off + 4, hi, true);
-}
-
-// CRC32 table
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[i] = c;
-  }
-  return t;
-})();
-
-function crc32(data) {
-  let c = 0xFFFFFFFF;
-  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
-  return (c ^ 0xFFFFFFFF) >>> 0;
-}
-
-function toggleCompression() {
-  useCompression = !useCompression;
-  const btn = document.getElementById('compress-toggle');
-  if (useCompression) {
-    btn.textContent = '🗜 DEFLATE';
-    btn.title = 'Currently: DEFLATE (smaller, slower). Click for STORE.';
-    btn.style.color = 'var(--warn)';
-    btn.style.borderColor = 'var(--warn)';
-  } else {
-    btn.textContent = '⚡ STORE';
-    btn.title = 'Currently: STORE (fastest, no recompression). Click for DEFLATE.';
-    btn.style.color = '';
-    btn.style.borderColor = '';
-  }
-  showToast('info', useCompression ? '🗜 Export mode: DEFLATE' : '⚡ Export mode: STORE (fast)');
-}
-
-// ── File type metadata ──
-const EXT_MAP = {
-  fbx: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
-  obj: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
-  dae: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
-  glb: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
-  gltf: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
-  blend: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
-  asset: { icon: '⚙️', cls: 'icon-data', label: 'Unity Asset' },
-  unity3d: { icon: '⚙️', cls: 'icon-data', label: 'Unity Bundle' },
-  bundle: { icon: '⚙️', cls: 'icon-data', label: 'Asset Bundle' },
-  json: { icon: '📋', cls: 'icon-data', label: 'JSON Data' },
-  xml: { icon: '📋', cls: 'icon-data', label: 'XML Data' },
-  bin: { icon: '💾', cls: 'icon-data', label: 'Binary Data' },
-  dat: { icon: '💾', cls: 'icon-data', label: 'Data File' },
-  bytes: { icon: '💾', cls: 'icon-data', label: 'Bytes Data' },
-  png: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
-  jpg: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
-  jpeg: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
-  webp: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
-  tga: { icon: '🖼️', cls: 'icon-img', label: 'Texture' },
-  ktx: { icon: '🖼️', cls: 'icon-img', label: 'Texture' },
-  dds: { icon: '🖼️', cls: 'icon-img', label: 'Texture' },
-  mp3: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
-  ogg: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
-  wav: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
-  m4a: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
+// ════════════════════════════════════════════════════════
+// FILE TYPE MAP
+// ════════════════════════════════════════════════════════
+var EXT_MAP={
+  fbx:{icon:'🧊',cls:'icon-3d',label:'3D Model'},obj:{icon:'🧊',cls:'icon-3d',label:'3D Model'},
+  dae:{icon:'🧊',cls:'icon-3d',label:'3D Model'},glb:{icon:'🧊',cls:'icon-3d',label:'3D Model'},
+  gltf:{icon:'🧊',cls:'icon-3d',label:'3D Model'},blend:{icon:'🧊',cls:'icon-3d',label:'3D Model'},
+  asset:{icon:'⚙️',cls:'icon-data',label:'Unity Asset'},unity3d:{icon:'⚙️',cls:'icon-data',label:'Unity Bundle'},
+  bundle:{icon:'⚙️',cls:'icon-data',label:'Asset Bundle'},json:{icon:'📋',cls:'icon-data',label:'JSON'},
+  xml:{icon:'📋',cls:'icon-data',label:'XML'},bin:{icon:'💾',cls:'icon-data',label:'Binary'},
+  dat:{icon:'💾',cls:'icon-data',label:'Data'},bytes:{icon:'💾',cls:'icon-data',label:'Bytes'},
+  png:{icon:'🖼️',cls:'icon-img',label:'Image'},jpg:{icon:'🖼️',cls:'icon-img',label:'Image'},
+  jpeg:{icon:'🖼️',cls:'icon-img',label:'Image'},webp:{icon:'🖼️',cls:'icon-img',label:'Image'},
+  tga:{icon:'🖼️',cls:'icon-img',label:'Texture'},ktx:{icon:'🖼️',cls:'icon-img',label:'Texture'},
+  dds:{icon:'🖼️',cls:'icon-img',label:'Texture'},mp3:{icon:'🔊',cls:'icon-audio',label:'Audio'},
+  ogg:{icon:'🔊',cls:'icon-audio',label:'Audio'},wav:{icon:'🔊',cls:'icon-audio',label:'Audio'},
+  m4a:{icon:'🔊',cls:'icon-audio',label:'Audio'},
 };
+function getInfo(name){var ext=name.split('.').pop().toLowerCase();return EXT_MAP[ext]||{icon:'📄',cls:'icon-other',label:(ext||'File').toUpperCase()};}
 
-function getFileInfo(name) {
-  const ext = name.split('.').pop().toLowerCase();
-  return EXT_MAP[ext] || { icon: '📄', cls: 'icon-other', label: ext.toUpperCase() || 'File' };
-}
+// ════════════════════════════════════════════════════════
+// DROP ZONE
+// ════════════════════════════════════════════════════════
+var dropzone=document.getElementById('dropzone');
+var fileInput=document.getElementById('file-input');
 
-function formatSize(bytes) {
-  if (bytes === 0 || !bytes) return '0 B';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
-  return (bytes / 1073741824).toFixed(3) + ' GB';
-}
-
-// ── DROP ZONE ──
-const dropzone  = document.getElementById('dropzone');
-const fileInput = document.getElementById('file-input');
-
-dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragover'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-dropzone.addEventListener('drop', e => {
-  e.preventDefault(); dropzone.classList.remove('dragover');
-  if (e.dataTransfer.files[0]) loadOBB(e.dataTransfer.files[0]);
+dropzone.addEventListener('click',function(e){e.stopPropagation();fileInput.click();});
+dropzone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();dropzone.classList.add('dragover');});
+dropzone.addEventListener('dragleave',function(e){e.stopPropagation();dropzone.classList.remove('dragover');});
+dropzone.addEventListener('drop',function(e){
+  e.preventDefault();e.stopPropagation();dropzone.classList.remove('dragover');
+  if(e.dataTransfer.files[0]){onFileChosen(e.dataTransfer.files[0]);}
 });
-dropzone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadOBB(fileInput.files[0]); });
+fileInput.addEventListener('change',function(){if(fileInput.files[0])onFileChosen(fileInput.files[0]);});
 
-async function loadOBB(file) {
-  const MAX = 3 * 1024 * 1024 * 1024;
-  if (file.size > MAX) {
-    showToast('error', `✗ File exceeds 3 GB limit (${formatSize(file.size)})`);
-    return;
-  }
+function onFileChosen(file){
+  obbFile=file;
+  var ds=document.getElementById('drop-selected');
+  ds.textContent='✓ '+file.name;ds.style.display='block';
+  dropzone.querySelector('.drop-hint').style.display='none';
+  document.getElementById('fip-name').textContent=file.name;
+  document.getElementById('fip-meta').textContent=formatSize(file.size)+' — indexing…';
+  document.getElementById('fip-count').textContent='…';
+  document.getElementById('file-info-pill').style.display='flex';
+  loadOBB(file);
+}
 
-  obbFile = file;  // set early so Diagnose works even if parse fails
-  showProgress('Parsing OBB structure…');
-
-  try {
-    setProgress(5, `Reading directory… (${formatSize(file.size)} file)`);
-    // parse only reads the Central Directory — no full-file load!
-    const entries = await parseZipCentralDirectory(file);
-
-    allFiles = entries;
-    allFiles.sort((a, b) => a.path.localeCompare(b.path));
-
-    const extSet = new Set(allFiles.map(f => f.path.split('.').pop().toLowerCase()));
-
-    setProgress(100, 'Done!');
-    await new Promise(r => setTimeout(r, 150));
+// ════════════════════════════════════════════════════════
+// LOAD OBB
+// ════════════════════════════════════════════════════════
+async function loadOBB(file){
+  var MAX=3*1024*1024*1024;
+  if(file.size>MAX){showToast('error','✗ File exceeds 3 GB ('+formatSize(file.size)+')');return;}
+  showProgress('Parsing OBB…');
+  try{
+    var entries=await parseZip(file);
+    allFiles=entries;
+    allFiles.sort(function(a,b){return a.path.localeCompare(b.path);});
+    var extSet=new Set(allFiles.map(function(f){return f.path.split('.').pop().toLowerCase();}));
+    setProgress(100,'Done!');
+    await new Promise(function(r){setTimeout(r,150);});
     hideProgress();
-
-    document.getElementById('fi-name').textContent  = file.name;
-    document.getElementById('fi-meta').textContent  = formatSize(file.size);
-    document.getElementById('fi-count').textContent = allFiles.length + ' files';
-    document.getElementById('file-info').style.display = 'flex';
-    document.getElementById('export-btn').disabled  = false;
-    document.getElementById('reset-btn').disabled   = false;
-
+    document.getElementById('fip-name').textContent=file.name;
+    document.getElementById('fip-meta').textContent=formatSize(file.size);
+    document.getElementById('fip-count').textContent=allFiles.length.toLocaleString()+' files';
+    document.getElementById('file-info-pill').style.display='flex';
+    document.getElementById('export-btn').disabled=false;
+    document.getElementById('reset-btn').disabled=false;
     buildFilters(extSet);
-    filteredFiles = [...allFiles];
-    renderFileList();
-    showToast('success', `✓ OBB indexed — ${allFiles.length} files (${formatSize(file.size)})`);
-  } catch (e) {
+    filteredFiles=allFiles.slice();
+    renderList();
+    showToast('success','✓ Loaded — '+allFiles.length.toLocaleString()+' files ('+formatSize(file.size)+')');
+  }catch(e){
     hideProgress();
-    showToast('error', '✗ Failed: ' + e.message);
+    showToast('error','✗ '+e.message);
     console.error(e);
   }
 }
 
-function buildFilters(extSet) {
-  const row = document.getElementById('filter-row');
-  row.innerHTML = '<button class="filter-btn active" data-ext="all" onclick="setFilter(\'all\', this)">All</button>';
-  const groups = { '3D': ['fbx','obj','dae','glb','gltf','blend'], 'Data': ['asset','unity3d','bundle','json','xml','bin','dat','bytes'], 'Image': ['png','jpg','jpeg','webp','tga','ktx','dds'], 'Audio': ['mp3','ogg','wav','m4a'] };
-  const found = {};
-  extSet.forEach(ext => {
-    for (const [g, exts] of Object.entries(groups)) {
-      if (exts.includes(ext)) { found[g] = true; break; }
-    }
+// ════════════════════════════════════════════════════════
+// FILTERS + LIST
+// ════════════════════════════════════════════════════════
+var GROUPS={
+  '3D':['fbx','obj','dae','glb','gltf','blend'],
+  'Data':['asset','unity3d','bundle','json','xml','bin','dat','bytes'],
+  'Image':['png','jpg','jpeg','webp','tga','ktx','dds'],
+  'Audio':['mp3','ogg','wav','m4a']
+};
+
+function buildFilters(extSet){
+  var row=document.getElementById('filter-row');
+  row.innerHTML='<button class="filter-btn active" onclick="setFilter(\'all\',this)">All</button>';
+  var found={};
+  extSet.forEach(function(ext){
+    for(var g in GROUPS){if(GROUPS[g].indexOf(ext)>=0){found[g]=true;break;}}
   });
-  for (const g of Object.keys(found)) {
-    const b = document.createElement('button');
-    b.className = 'filter-btn';
-    b.dataset.ext = g;
-    b.textContent = g;
-    b.onclick = function() { setFilter(g, this); };
+  for(var g in found){
+    var b=document.createElement('button');
+    b.className='filter-btn';b.textContent=g;
+    b.onclick=(function(gName){return function(){setFilter(gName,this);};})(g);
     row.appendChild(b);
   }
 }
 
-function setFilter(f, btn) {
-  activeFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+function setFilter(f,btn){
+  activeFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   filterFiles();
 }
 
-function filterFiles() {
-  const q = document.getElementById('search-input').value.toLowerCase();
-  const groups = { '3D': ['fbx','obj','dae','glb','gltf','blend'], 'Data': ['asset','unity3d','bundle','json','xml','bin','dat','bytes'], 'Image': ['png','jpg','jpeg','webp','tga','ktx','dds'], 'Audio': ['mp3','ogg','wav','m4a'] };
-  filteredFiles = allFiles.filter(f => {
-    const matchQ = !q || f.path.toLowerCase().includes(q);
-    if (!matchQ) return false;
-    if (activeFilter === 'all') return true;
-    const ext = f.path.split('.').pop().toLowerCase();
-    return (groups[activeFilter] || []).includes(ext);
+function filterFiles(){
+  var q=document.getElementById('search-input').value.toLowerCase();
+  filteredFiles=allFiles.filter(function(f){
+    if(q&&!f.path.toLowerCase().includes(q))return false;
+    if(activeFilter==='all')return true;
+    var ext=f.path.split('.').pop().toLowerCase();
+    return(GROUPS[activeFilter]||[]).indexOf(ext)>=0;
   });
-  renderFileList();
+  renderList();
 }
 
-function renderFileList() {
-  const list = document.getElementById('file-list');
-  document.getElementById('visible-count').textContent = filteredFiles.length;
-  if (!filteredFiles.length) {
-    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px;">No files found</div>';
+function renderList(){
+  var list=document.getElementById('file-list');
+  document.getElementById('visible-count').textContent=filteredFiles.length.toLocaleString();
+  if(!filteredFiles.length){
+    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No files found</div>';
     return;
   }
-  list.innerHTML = '';
-  const frag = document.createDocumentFragment();
-  filteredFiles.forEach(f => {
-    const info = getFileInfo(f.path);
-    const name = f.path.split('/').pop();
-    const isModified = !!modifications[f.path];
-    const div = document.createElement('div');
-    div.className = 'file-item' + (selectedFile === f.path ? ' selected' : '') + (isModified ? ' modified' : '');
-    div.innerHTML = `
-      <div class="file-icon ${info.cls}">${info.icon}</div>
-      <div class="file-item-info">
-        <div class="file-item-name">${name}</div>
-        <div class="file-item-meta">${info.label} · ${formatSize(f.size)}</div>
-      </div>
-      ${isModified ? '<div class="mod-dot" title="Modified"></div>' : ''}
-    `;
-    div.onclick = () => selectFile(f.path);
+  var frag=document.createDocumentFragment();
+  filteredFiles.forEach(function(f){
+    var info=getInfo(f.path);
+    var name=f.path.split('/').pop();
+    var isMod=!!modifications[f.path];
+    var div=document.createElement('div');
+    div.className='file-item'+(selectedPath===f.path?' selected':'')+(isMod?' modified':'');
+    div.innerHTML='<div class="file-icon '+info.cls+'">'+info.icon+'</div>'
+      +'<div class="file-item-info">'
+      +'<div class="file-item-name">'+name+'</div>'
+      +'<div class="file-item-meta">'+info.label+' &middot; '+formatSize(f.size)+'</div>'
+      +'</div>'+(isMod?'<div class="mod-dot" title="Modified"></div>':'');
+    div.onclick=(function(p){return function(){selectFile(p);closeSidebar();};})(f.path);
     frag.appendChild(div);
   });
-  list.appendChild(frag);
+  list.innerHTML='';list.appendChild(frag);
 }
 
-function selectFile(path) {
-  selectedFile = path;
-  renderFileList();
-  showFileDetail(path);
+// ════════════════════════════════════════════════════════
+// FILE DETAIL
+// ════════════════════════════════════════════════════════
+function selectFile(path){
+  selectedPath=path;renderList();showDetail(path);
 }
 
-function showFileDetail(path) {
-  const f = allFiles.find(x => x.path === path);
-  if (!f) return;
-  const info = getFileInfo(path);
-  const name = path.split('/').pop();
-  const isModified = !!modifications[path];
-
-  document.getElementById('panel-title').textContent = name;
-  document.getElementById('dl-btn').style.display = '';
-  document.getElementById('replace-btn').style.display = '';
-
-  document.getElementById('detail-area').innerHTML = `
-    <div class="asset-card">
-      <div class="asset-card-header">
-        <div class="big-file-icon ${info.cls}">${info.icon}</div>
-        <div>
-          <h4>${name}</h4>
-          <div class="path">${path}</div>
-        </div>
-        ${isModified ? '<span class="pill" style="margin-left:auto">Modified</span>' : ''}
-      </div>
-      <div class="meta-grid">
-        <div class="meta-item"><label>Type</label><div class="val">${info.label}</div></div>
-        <div class="meta-item"><label>Extension</label><div class="val">.${name.split('.').pop()}</div></div>
-        <div class="meta-item"><label>Size</label><div class="val">${formatSize(f.size)}</div></div>
-        <div class="meta-item"><label>Comp. Size</label><div class="val">${formatSize(f.compSize)}</div></div>
-        <div class="meta-item"><label>Method</label><div class="val">${f.compMethod === 0 ? 'STORE' : f.compMethod === 8 ? 'DEFLATE' : 'Method '+f.compMethod}</div></div>
-        <div class="meta-item" style="grid-column:1/-1"><label>Full Path</label><div class="val" style="font-size:11px;word-break:break-all">${path}</div></div>
-        ${isModified ? `<div class="meta-item" style="grid-column:1/-1"><label>Replacement</label><div class="val" style="color:var(--warn)">${modifications[path].name} (${formatSize(modifications[path].size)})</div></div>` : ''}
-      </div>
-      <div class="action-area">
-        <button class="btn btn-success" onclick="downloadSelected()">⬇ Download Original</button>
-        <button class="btn btn-primary" onclick="openReplaceModal()">↺ Replace File</button>
-        ${isModified ? `<button class="btn btn-danger" onclick="clearReplacement('${path}')">✕ Clear Replacement</button>` : ''}
-      </div>
-    </div>
-  `;
+function showDetail(path){
+  var f=allFiles.find(function(x){return x.path===path;});
+  if(!f)return;
+  var info=getInfo(path),name=path.split('/').pop(),isMod=!!modifications[path];
+  var meth=f.compMethod===0?'STORE':f.compMethod===8?'DEFLATE':'Method '+f.compMethod;
+  document.getElementById('toolbar').style.display='flex';
+  document.getElementById('toolbar-title').textContent=name;
+  document.getElementById('detail-area').innerHTML=
+    '<div class="asset-card">'
+    +'<div class="card-head">'
+    +'<div class="card-icon '+info.cls+'">'+info.icon+'</div>'
+    +'<div style="flex:1;min-width:0"><h4>'+name+'</h4><div class="card-path">'+path+'</div></div>'
+    +(isMod?'<span class="card-badge">Modified</span>':'')
+    +'</div>'
+    +'<div class="meta-grid">'
+    +'<div class="meta-item"><label>Type</label><div class="val">'+info.label+'</div></div>'
+    +'<div class="meta-item"><label>Method</label><div class="val">'+meth+'</div></div>'
+    +'<div class="meta-item"><label>Orig Size</label><div class="val">'+formatSize(f.size)+'</div></div>'
+    +'<div class="meta-item"><label>Comp Size</label><div class="val">'+formatSize(f.compSize)+'</div></div>'
+    +(isMod?'<div class="meta-item meta-full"><label>Replacement</label><div class="val" style="color:var(--warn)">'+modifications[path].name+' ('+formatSize(modifications[path].size)+')</div></div>':'')
+    +'<div class="meta-item meta-full"><label>Path</label><div class="val" style="font-size:10px;word-break:break-all">'+path+'</div></div>'
+    +'</div>'
+    +'<div class="action-row">'
+    +'<button class="btn btn-success" onclick="downloadSelected()">⬇ Download</button>'
+    +'<button class="btn btn-primary" onclick="openReplaceModal()">↺ Replace</button>'
+    +(isMod?'<button class="btn btn-danger" onclick="clearMod(\''+path.replace(/'/g,"\\'")+'\')" >✕ Clear</button>':'')
+    +'</div>'
+    +'</div>';
 }
 
-async function downloadSelected() {
-  if (!selectedFile) return;
-  const f = allFiles.find(x => x.path === selectedFile);
-  if (!f) return;
-  const name = selectedFile.split('/').pop();
-  try {
-    showToast('info', `⬇ Extracting ${name}…`);
-    const blob = await f.toBlob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-    showToast('success', `✓ Downloaded: ${name} (${formatSize(blob.size)})`);
-  } catch (e) {
-    showToast('error', '✗ ' + e.message);
-  }
+async function downloadSelected(){
+  if(!selectedPath)return;
+  var f=allFiles.find(function(x){return x.path===selectedPath;});
+  if(!f)return;
+  var name=selectedPath.split('/').pop();
+  showToast('info','⬇ Extracting '+name+'…');
+  try{
+    var blob=await f.toBlob();
+    triggerDownload(blob,name);
+    showToast('success','✓ Downloaded: '+name+' ('+formatSize(blob.size)+')');
+  }catch(e){showToast('error','✗ '+e.message);}
 }
 
-function openReplaceModal() {
-  if (!selectedFile) return;
-  document.getElementById('replace-target').textContent = selectedFile.split('/').pop();
-  document.getElementById('replace-file-name').style.display = 'none';
-  document.getElementById('replace-file-name').textContent = '';
-  document.getElementById('replace-input').value = '';
-  document.getElementById('confirm-replace-btn').disabled = true;
-  pendingReplaceFile = null;
+function triggerDownload(blob,name){
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=name;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(url);},15000);
+}
+
+function clearMod(path){
+  delete modifications[path];renderList();showDetail(path);
+  showToast('info','Replacement cleared');
+}
+
+// ════════════════════════════════════════════════════════
+// REPLACE MODAL
+// ════════════════════════════════════════════════════════
+function openReplaceModal(){
+  if(!selectedPath)return;
+  document.getElementById('replace-target').textContent=selectedPath.split('/').pop();
+  document.getElementById('replace-chosen').style.display='none';
+  document.getElementById('replace-input').value='';
+  document.getElementById('confirm-rep-btn').disabled=true;
+  pendingReplace=null;
   document.getElementById('replace-modal').classList.add('show');
 }
-
-function closeReplaceModal() {
-  document.getElementById('replace-modal').classList.remove('show');
+function closeReplaceModal(){document.getElementById('replace-modal').classList.remove('show');}
+function onReplaceChosen(inp){
+  if(!inp.files[0])return;
+  pendingReplace=inp.files[0];
+  var el=document.getElementById('replace-chosen');
+  el.textContent='✓ '+pendingReplace.name+' ('+formatSize(pendingReplace.size)+')';
+  el.style.display='block';
+  document.getElementById('confirm-rep-btn').disabled=false;
+}
+function confirmReplace(){
+  if(!pendingReplace||!selectedPath)return;
+  modifications[selectedPath]={file:pendingReplace,name:pendingReplace.name,size:pendingReplace.size};
+  var f=allFiles.find(function(x){return x.path===selectedPath;});
+  if(f)f.size=pendingReplace.size;
+  closeReplaceModal();renderList();showDetail(selectedPath);
+  showToast('success','✓ Queued: '+selectedPath.split('/').pop());
 }
 
-function onReplaceFileChosen(input) {
-  if (!input.files[0]) return;
-  pendingReplaceFile = input.files[0];
-  const el = document.getElementById('replace-file-name');
-  el.textContent = '✓ ' + pendingReplaceFile.name + ' (' + formatSize(pendingReplaceFile.size) + ')';
-  el.style.display = 'block';
-  document.getElementById('confirm-replace-btn').disabled = false;
-}
-
-async function confirmReplace() {
-  if (!pendingReplaceFile || !selectedFile) return;
-  modifications[selectedFile] = { file: pendingReplaceFile, name: pendingReplaceFile.name, size: pendingReplaceFile.size };
-  // Update display size in allFiles
-  const f = allFiles.find(x => x.path === selectedFile);
-  if (f) f.size = pendingReplaceFile.size;
-  closeReplaceModal();
-  renderFileList();
-  showFileDetail(selectedFile);
-  showToast('success', '✓ Replacement queued: ' + selectedFile.split('/').pop());
-}
-
-function clearReplacement(path) {
-  delete modifications[path];
-  renderFileList();
-  showFileDetail(path);
-  showToast('info', 'Replacement cleared');
-}
-
-async function exportOBB() {
-  if (!allFiles.length) return;
-  const compressionMode = useCompression ? 'DEFLATE' : 'STORE';
-  showProgress(`Building OBB (${compressionMode})…`);
-  try {
-    const blob = await buildZip(allFiles, modifications, compressionMode);
+// ════════════════════════════════════════════════════════
+// EXPORT
+// ════════════════════════════════════════════════════════
+async function exportOBB(){
+  if(!allFiles.length)return;
+  var mode=useCompression?'DEFLATE':'STORE';
+  showProgress('Exporting OBB ('+mode+')…');
+  try{
+    var blob=await buildZip(allFiles,modifications,mode);
     hideProgress();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    const origName = document.getElementById('fi-name').textContent;
-    a.download = origName.replace(/\.obb$/i, '_modified.obb') || 'modified.obb';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 15000);
-    const modCount = Object.keys(modifications).length;
-    showToast('success', `✓ OBB exported! ${formatSize(blob.size)}${modCount ? ' · ' + modCount + ' modified' : ''}`);
-  } catch (e) {
-    hideProgress();
-    showToast('error', '✗ Export failed: ' + e.message);
-    console.error(e);
+    var orig=document.getElementById('fip-name').textContent;
+    var name=orig.replace(/\.obb$/i,'_modified.obb')||'modified.obb';
+    triggerDownload(blob,name);
+    var mc=Object.keys(modifications).length;
+    showToast('success','✓ Exported '+formatSize(blob.size)+(mc?' · '+mc+' modified':''));
+  }catch(e){hideProgress();showToast('error','✗ Export failed: '+e.message);console.error(e);}
+}
+
+// ════════════════════════════════════════════════════════
+// COMPRESSION TOGGLE
+// ════════════════════════════════════════════════════════
+function toggleCompression(){
+  useCompression=!useCompression;
+  var btn=document.getElementById('compress-btn');
+  if(useCompression){
+    btn.innerHTML='🗜 <span class="btn-label">DEFLATE</span>';
+    btn.classList.add('active-mode');
+  } else {
+    btn.innerHTML='⚡ <span class="btn-label">STORE</span>';
+    btn.classList.remove('active-mode');
   }
+  showToast('info',useCompression?'🗜 DEFLATE mode (smaller)':'⚡ STORE mode (fastest)');
 }
 
-function resetAll() {
-  if (!confirm('Reset everything? All replacements will be lost.')) return;
-  obbFile = null; allFiles = []; filteredFiles = []; selectedFile = null; modifications = {};
-  document.getElementById('file-list').innerHTML = '';
-  document.getElementById('fi-name').textContent = '—';
-  document.getElementById('fi-meta').textContent = '—';
-  document.getElementById('fi-count').textContent = '0 files';
-  document.getElementById('file-info').style.display = 'none';
-  document.getElementById('export-btn').disabled = true;
-  document.getElementById('reset-btn').disabled = true;
-  document.getElementById('panel-title').textContent = 'Select a file from the list';
-  document.getElementById('dl-btn').style.display = 'none';
-  document.getElementById('replace-btn').style.display = 'none';
-  document.getElementById('detail-area').innerHTML = `<div class="empty-state"><div class="big-icon">🗂️</div><p>Load an OBB file to get started.<br>All processing happens locally in your browser.</p></div>`;
-  document.getElementById('visible-count').textContent = '0';
-  document.getElementById('filter-row').innerHTML = '<button class="filter-btn active" data-ext="all" onclick="setFilter(\'all\', this)">All</button>';
-  fileInput.value = '';
-  showToast('info', 'Reset complete');
+// ════════════════════════════════════════════════════════
+// RESET
+// ════════════════════════════════════════════════════════
+function resetAll(){
+  if(!confirm('Reset? All replacements will be lost.'))return;
+  obbFile=null;allFiles=[];filteredFiles=[];selectedPath=null;modifications={};
+  document.getElementById('file-list').innerHTML='';
+  document.getElementById('visible-count').textContent='0';
+  document.getElementById('file-info-pill').style.display='none';
+  document.getElementById('export-btn').disabled=true;
+  document.getElementById('reset-btn').disabled=true;
+  document.getElementById('toolbar').style.display='none';
+  document.getElementById('detail-area').innerHTML='<div class="empty-state"><div class="empty-icon">🗂️</div><p style="font-size:13px;font-weight:500">Load an OBB file to get started</p><p style="font-size:12px;color:var(--text3)">All processing is 100% local</p></div>';
+  document.getElementById('filter-row').innerHTML='<button class="filter-btn active" onclick="setFilter(\'all\',this)">All</button>';
+  var ds=document.getElementById('drop-selected');ds.style.display='none';
+  dropzone.querySelector('.drop-hint').style.display='';
+  fileInput.value='';
+  showToast('info','Reset complete');
 }
 
+// ════════════════════════════════════════════════════════
+// DIAGNOSE
+// ════════════════════════════════════════════════════════
+async function diagnoseFile(){
+  if(!obbFile){showToast('info','Load a file first, then click 🔍');return;}
+  var file=obbFile,READ=256;
+  var hbuf=await file.slice(0,READ).arrayBuffer();
+  var tbuf=await file.slice(Math.max(0,file.size-READ)).arrayBuffer();
+  var ha=new Uint8Array(hbuf),ta=new Uint8Array(tbuf);
+  function hex(arr){return Array.from(arr).map(function(b,i){return(i%16===0?'\n'+i.toString(16).padStart(5,'0')+':  ':' ')+b.toString(16).padStart(2,'0');}).join('').trim();}
+  function ascii(arr){return Array.from(arr).map(function(b){return b>=32&&b<127?String.fromCharCode(b):'.';}).join('');}
+  var tdv=new DataView(tbuf),found=[];
+  for(var i=0;i<=ta.length-4;i++){
+    var v=tdv.getUint32(i,true);
+    if(v===SIG_EOCD)found.push('EOCD at tail-'+(READ-i));
+    if(v===SIG_LOC64)found.push('ZIP64 Locator at tail-'+(READ-i));
+    if(v===SIG_EOCD64)found.push('ZIP64 EOCD at tail-'+(READ-i));
+  }
+  var hdv=new DataView(hbuf),hs=hdv.getUint32(0,true);
+  var headInfo=hs===SIG_LFH?'Starts with LFH ✓ (valid ZIP)':hs===SIG_CD?'Starts with CD record':'No ZIP sig ✗ — 0x'+hs.toString(16);
+  var report=['File: '+file.name,'Size: '+formatSize(file.size)+' ('+file.size+' bytes)','',
+    'HEAD sig: '+headInfo,
+    'TAIL sigs: '+(found.length?found.join(', '):'NONE — not a valid ZIP tail!'),
+    '','=== First '+READ+' bytes ===',hex(ha),'','=== Last '+READ+' bytes ===',hex(ta),'','=== Last '+READ+' ASCII ===',ascii(ta)].join('\n');
+  document.getElementById('toolbar').style.display='flex';
+  document.getElementById('toolbar-title').textContent='Diagnosis Report';
+  document.getElementById('dl-btn').style.display='none';
+  document.getElementById('rep-btn').style.display='none';
+  document.getElementById('detail-area').innerHTML=
+    '<div class="asset-card" style="max-width:100%">'
+    +'<div class="card-head"><div class="card-icon icon-data">🔍</div>'
+    +'<div><h4>File Diagnosis</h4><div class="card-path">'+file.name+' — '+formatSize(file.size)+'</div></div></div>'
+    +'<div style="padding:16px 18px">'
+    +'<p style="font-size:11px;color:var(--text2);margin-bottom:10px">Share this to get help diagnosing the format.</p>'
+    +'<pre class="diag-pre">'+report.replace(/</g,'&lt;')+'</pre>'
+    +'<button class="btn btn-ghost" style="margin-top:12px" onclick="navigator.clipboard.writeText(document.querySelector(\'.diag-pre\').textContent).then(function(){showToast(\'success\',\'✓ Copied!\')})">📋 Copy Report</button>'
+    +'</div></div>';
+}
+
+// ════════════════════════════════════════════════════════
+// MOBILE SIDEBAR
+// ════════════════════════════════════════════════════════
+function toggleSidebar(){
+  var s=document.getElementById('sidebar');
+  var o=document.getElementById('sidebar-overlay');
+  if(s.classList.contains('open')){s.classList.remove('open');o.classList.remove('show');}
+  else{s.classList.add('open');o.classList.add('show');}
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+// ════════════════════════════════════════════════════════
 // PROGRESS
-function showProgress(msg) {
-  document.getElementById('progress-title').textContent = msg;
-  document.getElementById('progress-label').textContent = msg;
-  document.getElementById('progress-fill').style.width = '0%';
-  document.getElementById('progress-modal').classList.add('show');
+// ════════════════════════════════════════════════════════
+function showProgress(msg){
+  document.getElementById('prog-title').textContent=msg;
+  document.getElementById('prog-label').textContent='Please wait…';
+  document.getElementById('prog-fill').style.width='0%';
+  document.getElementById('prog-sub').textContent='';
+  document.getElementById('prog-overlay').classList.add('show');
 }
-
-function setProgress(pct, label) {
-  document.getElementById('progress-fill').style.width = Math.min(100, pct) + '%';
-  document.getElementById('progress-label').textContent = label;
+function setProgress(pct,label){
+  document.getElementById('prog-fill').style.width=Math.min(100,pct)+'%';
+  document.getElementById('prog-sub').textContent=label||'';
 }
+function hideProgress(){document.getElementById('prog-overlay').classList.remove('show');}
 
-function hideProgress() {
-  document.getElementById('progress-modal').classList.remove('show');
-}
-
-// ── Diagnose: show hex dump of first + last 64 bytes to understand file format ──
-async function diagnoseFile() {
-  // Allow diagnosing even without a loaded file by re-using the file input
-  if (!obbFile) {
-    showToast('info', 'Load a file first, then click Diagnose');
-    return;
-  }
-  const file = obbFile;
-  const READ = 256;
-  const headBuf = await file.slice(0, READ).arrayBuffer();
-  const tailBuf = await file.slice(Math.max(0, file.size - READ)).arrayBuffer();
-  const headArr = new Uint8Array(headBuf);
-  const tailArr = new Uint8Array(tailBuf);
-
-  function toHex(arr) {
-    return Array.from(arr).map((b,i) => (i%16===0?'\n'+i.toString(16).padStart(6,'0')+':  ':' ')+b.toString(16).padStart(2,'0')).join('').trim();
-  }
-  function toAscii(arr) {
-    return Array.from(arr).map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('');
-  }
-
-  // Look for EOCD sig in tail
-  const tailDV = new DataView(tailBuf);
-  const eocdSig = 0x06054b50;
-  const loc64Sig = 0x07064b50;
-  const eocd64Sig = 0x06064b50;
-  const cdSig = 0x02014b50;
-  const lfhSig = 0x04034b50;
-
-  const found = [];
-  for (let i = 0; i <= tailArr.length - 4; i++) {
-    const v = tailDV.getUint32(i, true);
-    if (v === eocdSig)   found.push(`EOCD at tail-${READ-i}`);
-    if (v === loc64Sig)  found.push(`ZIP64 Locator at tail-${READ-i}`);
-    if (v === eocd64Sig) found.push(`ZIP64 EOCD at tail-${READ-i}`);
-  }
-  const headDV = new DataView(headBuf);
-  const headSig = headDV.getUint32(0, true);
-  const headInfo = headSig === lfhSig ? 'Starts with LFH (valid ZIP start ✓)' :
-                   headSig === cdSig  ? 'Starts with CD record (unusual)' :
-                   'Does NOT start with ZIP signature ✗ — sig: 0x' + headSig.toString(16);
-
-  const report = [
-    `File: ${file.name}`,
-    `Size: ${formatSize(file.size)} (${file.size} bytes)`,
-    ``,
-    `HEAD signature: ${headInfo}`,
-    `TAIL signatures found: ${found.length ? found.join(', ') : 'NONE — not a valid ZIP tail!'}`,
-    ``,
-    `=== First ${READ} bytes (hex) ===`,
-    toHex(headArr),
-    ``,
-    `=== Last ${READ} bytes (hex) ===`,
-    toHex(tailArr),
-    ``,
-    `=== Last ${READ} bytes (ASCII) ===`,
-    toAscii(tailArr),
-  ].join('\n');
-
-  // Show in a modal
-  document.getElementById('detail-area').innerHTML = `
-    <div class="asset-card" style="max-width:100%">
-      <div class="asset-card-header">
-        <div class="big-file-icon icon-data">🔍</div>
-        <div><h4>File Diagnosis</h4><div class="path">${file.name} — ${formatSize(file.size)}</div></div>
-      </div>
-      <div style="padding:16px 20px">
-        <p style="font-size:11px;color:var(--muted);margin-bottom:10px">Share this output to get help. Copy with the button below.</p>
-        <pre style="font-family:var(--mono);font-size:10px;color:var(--text);background:var(--bg);padding:14px;border-radius:6px;overflow:auto;white-space:pre;max-height:500px;line-height:1.5">${report.replace(/</g,'&lt;')}</pre>
-        <button class="btn btn-ghost" style="margin-top:12px" onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent).then(()=>showToast('success','✓ Copied!'))">📋 Copy Report</button>
-      </div>
-    </div>
-  `;
-  document.getElementById('panel-title').textContent = 'Diagnosis Report';
-  document.getElementById('dl-btn').style.display = 'none';
-  document.getElementById('replace-btn').style.display = 'none';
-}
-
-  const icons = { success: '✓', error: '✗', info: 'ℹ' };
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${msg}</span>`;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+// ════════════════════════════════════════════════════════
+// TOASTS
+// ════════════════════════════════════════════════════════
+function showToast(type,msg){
+  var icons={success:'✓',error:'✗',info:'ℹ'};
+  var el=document.createElement('div');
+  el.className='toast '+type;
+  el.innerHTML='<span>'+icons[type]+'</span><span>'+msg+'</span>';
+  document.getElementById('toast-wrap').appendChild(el);
+  setTimeout(function(){el.remove();},3500);
 }
 </script>
 </body>
