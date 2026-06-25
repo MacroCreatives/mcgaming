@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBB Asset Editor v2.0</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --surface: #14171c;
+    --border: #1e2330;
+    --accent: #4f8ef7;
+    --accent2: #7c5cfc;
+    --success: #29d884;
+    --warn: #f7b84f;
+    --danger: #f75a5a;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+  }
+
+  .logo {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--text);
+  }
+
+  header span {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .badge {
+    margin-left: auto;
+    background: rgba(79,142,247,0.12);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(79,142,247,0.25);
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    max-height: calc(100vh - 62px);
+  }
+
+  /* DROP ZONE */
+  .drop-panel {
+    grid-column: 1 / -1;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+  }
+
+  #dropzone {
+    flex: 1;
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 22px 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+
+  #dropzone:hover, #dropzone.dragover {
+    border-color: var(--accent);
+    background: rgba(79,142,247,0.04);
+  }
+
+  #dropzone input { display: none; }
+
+  .drop-icon { font-size: 28px; margin-bottom: 6px; }
+
+  .drop-text {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .drop-text strong { color: var(--accent); cursor: pointer; }
+
+  #file-info {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 220px;
+  }
+
+  .file-name {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 280px;
+  }
+
+  .file-meta { font-size: 11px; color: var(--muted); }
+
+  .pill {
+    display: inline-block;
+    background: rgba(41,216,132,0.12);
+    color: var(--success);
+    border: 1px solid rgba(41,216,132,0.25);
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-success {
+    background: rgba(41,216,132,0.15);
+    color: var(--success);
+    border: 1px solid rgba(41,216,132,0.3);
+  }
+
+  .btn-danger {
+    background: rgba(247,90,90,0.12);
+    color: var(--danger);
+    border: 1px solid rgba(247,90,90,0.25);
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sidebar-header h2 {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    flex: 1;
+  }
+
+  .count-badge {
+    background: var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+
+  .search-box {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-box input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box input::placeholder { color: var(--muted); }
+
+  .filter-row {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(79,142,247,0.08);
+  }
+
+  #file-list {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    padding: 9px 14px;
+    gap: 10px;
+    border-bottom: 1px solid rgba(30,35,48,0.5);
+    cursor: pointer;
+    transition: background 0.12s;
+    position: relative;
+  }
+
+  .file-item:hover { background: rgba(79,142,247,0.05); }
+  .file-item.selected { background: rgba(79,142,247,0.1); }
+  .file-item.modified { border-left: 2px solid var(--warn); }
+
+  .file-icon {
+    width: 28px; height: 28px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .icon-3d { background: rgba(124,92,252,0.15); color: var(--accent2); }
+  .icon-data { background: rgba(247,184,79,0.15); color: var(--warn); }
+  .icon-img { background: rgba(41,216,132,0.15); color: var(--success); }
+  .icon-audio { background: rgba(247,90,90,0.15); color: var(--danger); }
+  .icon-other { background: rgba(100,116,139,0.15); color: var(--muted); }
+
+  .file-item-info { flex: 1; min-width: 0; }
+
+  .file-item-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+
+  .file-item-meta {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .mod-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--warn);
+    flex-shrink: 0;
+  }
+
+  /* MAIN PANEL */
+  .main-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .toolbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    flex-wrap: wrap;
+  }
+
+  .toolbar h3 {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .detail-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 10px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .empty-state .big-icon { font-size: 48px; opacity: 0.3; }
+  .empty-state p { font-size: 13px; }
+
+  .asset-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    max-width: 680px;
+  }
+
+  .asset-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .asset-card-header .big-file-icon {
+    width: 42px; height: 42px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+
+  .asset-card-header h4 {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .asset-card-header .path {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .meta-grid {
+    padding: 16px 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .meta-item label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: var(--mono);
+    display: block;
+    margin-bottom: 3px;
+  }
+
+  .meta-item .val {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .action-area {
+    padding: 16px 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  /* Replace modal overlay */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 480px;
+    max-width: 95vw;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .modal-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  .modal-body { padding: 20px; }
+
+  .modal-footer {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .replace-drop {
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 14px;
+  }
+
+  .replace-drop:hover { border-color: var(--accent); }
+  .replace-drop input { display: none; }
+  .replace-drop .small-icon { font-size: 24px; margin-bottom: 6px; }
+  .replace-drop p { font-size: 12px; color: var(--muted); }
+  .replace-drop p strong { color: var(--accent); }
+
+  #replace-file-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--success);
+    margin-top: 6px;
+    display: none;
+  }
+
+  /* Progress bar */
+  .progress-bar-wrap {
+    display: none;
+    margin-top: 14px;
+  }
+
+  .progress-bar-wrap.show { display: block; }
+
+  .progress-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 4px;
+    transition: width 0.2s;
+    width: 0%;
+  }
+
+  /* Toast */
+  .toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+  }
+
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    animation: slideIn 0.2s ease;
+    max-width: 320px;
+  }
+
+  .toast.success { border-color: rgba(41,216,132,0.4); }
+  .toast.error { border-color: rgba(247,90,90,0.4); }
+  .toast.info { border-color: rgba(79,142,247,0.4); }
+
+  @keyframes slideIn {
+    from { transform: translateX(40px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+    .sidebar { max-height: 280px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📦</div>
+  <h1>OBB Asset Editor <span>v2.0</span></h1>
+  <div class="badge">Local · No Upload · 3 GB</div>
+</header>
+
+<main>
+  <!-- DROP PANEL -->
+  <div class="drop-panel">
+    <div id="dropzone">
+    <input type="file" id="file-input" accept=".obb,.zip">
+      <div class="drop-icon">📂</div>
+      <div class="drop-text">
+        Drop your <strong onclick="document.getElementById('file-input').click()">.obb file here</strong> or click to browse
+      </div>
+    </div>
+    <div id="file-info">
+      <div class="file-name" id="fi-name">—</div>
+      <div class="file-meta" id="fi-meta">—</div>
+      <span class="pill" id="fi-count">0 files</span>
+    </div>
+    <button class="btn btn-primary" id="export-btn" disabled onclick="exportOBB()">⬇ Export OBB</button>
+    <button class="btn btn-ghost" id="compress-toggle" onclick="toggleCompression()" title="Toggle compression mode">⚡ STORE</button>
+    <button class="btn btn-ghost" id="reset-btn" disabled onclick="resetAll()">✕ Reset</button>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>Contents</h2>
+      <span class="count-badge" id="visible-count">0</span>
+    </div>
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="Search files…" oninput="filterFiles()">
+    </div>
+    <div class="filter-row" id="filter-row">
+      <button class="filter-btn active" data-ext="all" onclick="setFilter('all', this)">All</button>
+    </div>
+    <div id="file-list"></div>
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div class="main-panel">
+    <div class="toolbar">
+      <h3 id="panel-title">Select a file from the list</h3>
+      <button class="btn btn-ghost" id="dl-btn" style="display:none" onclick="downloadSelected()">⬇ Download</button>
+      <button class="btn btn-primary" id="replace-btn" style="display:none" onclick="openReplaceModal()">↺ Replace</button>
+    </div>
+    <div class="detail-area" id="detail-area">
+      <div class="empty-state">
+        <div class="big-icon">🗂️</div>
+        <p>Load an OBB file to get started.<br>All processing happens locally in your browser.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- REPLACE MODAL -->
+<div class="modal-overlay" id="replace-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span>↺</span>
+      <h3>Replace Asset</h3>
+      <button class="btn btn-ghost" style="padding:4px 10px" onclick="closeReplaceModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+        Replacing: <span id="replace-target" style="color:var(--text);font-family:var(--mono)"></span>
+      </p>
+      <div class="replace-drop" id="replace-drop" onclick="document.getElementById('replace-input').click()">
+        <input type="file" id="replace-input" onchange="onReplaceFileChosen(this)">
+        <div class="small-icon">📁</div>
+        <p>Click to choose replacement file</p>
+        <p><strong>Any file type accepted</strong></p>
+      </div>
+      <div id="replace-file-name"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeReplaceModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirm-replace-btn" disabled onclick="confirmReplace()">Confirm Replace</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS MODAL -->
+<div class="modal-overlay" id="progress-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="progress-title">Processing…</h3>
+    </div>
+    <div class="modal-body">
+      <div class="progress-bar-wrap show">
+        <div class="progress-label" id="progress-label">Loading…</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+let zip = null;
+let allFiles = [];
+let filteredFiles = [];
+let selectedFile = null;
+let modifications = {};
+let pendingReplaceFile = null;
+let activeFilter = 'all';
+let useCompression = false; // STORE mode by default for maximum speed
+
+function toggleCompression() {
+  useCompression = !useCompression;
+  const btn = document.getElementById('compress-toggle');
+  if (useCompression) {
+    btn.textContent = '🗜 DEFLATE';
+    btn.title = 'Currently: DEFLATE compression (smaller file, slower). Click for STORE mode.';
+    btn.style.color = 'var(--warn)';
+    btn.style.borderColor = 'var(--warn)';
+  } else {
+    btn.textContent = '⚡ STORE';
+    btn.title = 'Currently: STORE mode (no compression, fastest). Click for DEFLATE.';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+  }
+  showToast('info', useCompression ? '🗜 Export mode: DEFLATE (compressed)' : '⚡ Export mode: STORE (fast, no recompression)');
+}
+
+const EXT_MAP = {
+  fbx: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
+  obj: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
+  dae: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
+  glb: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
+  gltf: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
+  blend: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
+  asset: { icon: '⚙️', cls: 'icon-data', label: 'Unity Asset' },
+  unity3d: { icon: '⚙️', cls: 'icon-data', label: 'Unity Bundle' },
+  bundle: { icon: '⚙️', cls: 'icon-data', label: 'Asset Bundle' },
+  json: { icon: '📋', cls: 'icon-data', label: 'JSON Data' },
+  xml: { icon: '📋', cls: 'icon-data', label: 'XML Data' },
+  bin: { icon: '💾', cls: 'icon-data', label: 'Binary Data' },
+  dat: { icon: '💾', cls: 'icon-data', label: 'Data File' },
+  bytes: { icon: '💾', cls: 'icon-data', label: 'Bytes Data' },
+  png: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
+  jpg: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
+  jpeg: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
+  webp: { icon: '🖼️', cls: 'icon-img', label: 'Image' },
+  tga: { icon: '🖼️', cls: 'icon-img', label: 'Texture' },
+  ktx: { icon: '🖼️', cls: 'icon-img', label: 'Texture' },
+  dds: { icon: '🖼️', cls: 'icon-img', label: 'Texture' },
+  mp3: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
+  ogg: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
+  wav: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
+  m4a: { icon: '🔊', cls: 'icon-audio', label: 'Audio' },
+};
+
+function getFileInfo(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  return EXT_MAP[ext] || { icon: '📄', cls: 'icon-other', label: ext.toUpperCase() || 'File' };
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
+  return (bytes / 1073741824).toFixed(3) + ' GB';
+}
+
+// DROP ZONE
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files[0]) loadOBB(e.dataTransfer.files[0]);
+});
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadOBB(fileInput.files[0]); });
+
+async function loadOBB(file) {
+  // 3 GB limit
+  const MAX_SIZE = 3 * 1024 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    showToast('error', '✗ File exceeds 3 GB limit (' + formatSize(file.size) + ')');
+    return;
+  }
+
+  showProgress('Loading OBB…');
+  try {
+    setProgress(5, 'Reading file…');
+
+    // Use chunked streaming read for faster memory allocation on large files
+    const CHUNK = 64 * 1024 * 1024; // 64 MB chunks
+    let buf;
+    if (file.size > CHUNK) {
+      // Stream in chunks, report progress
+      const chunks = [];
+      let offset = 0;
+      while (offset < file.size) {
+        const slice = file.slice(offset, offset + CHUNK);
+        const chunk = await slice.arrayBuffer();
+        chunks.push(new Uint8Array(chunk));
+        offset += CHUNK;
+        const readPct = Math.min(25, Math.round((offset / file.size) * 25));
+        setProgress(readPct, `Reading… ${formatSize(Math.min(offset, file.size))} / ${formatSize(file.size)}`);
+      }
+      // Combine chunks into single buffer
+      const total = chunks.reduce((s, c) => s + c.byteLength, 0);
+      const combined = new Uint8Array(total);
+      let pos = 0;
+      for (const c of chunks) { combined.set(c, pos); pos += c.byteLength; }
+      buf = combined.buffer;
+    } else {
+      buf = await file.arrayBuffer();
+    }
+
+    setProgress(28, 'Parsing ZIP structure…');
+
+    // Load with zip64 support enabled for large files
+    zip = await JSZip.loadAsync(buf, {
+      checkCRC32: false, // skip CRC verification for faster load
+      optimizedBinaryString: false,
+      createFolders: false,
+    });
+
+    setProgress(80, 'Indexing files…');
+
+    allFiles = [];
+    const extSet = new Set();
+
+    // Batch index entries without extracting data (lazy)
+    const entries = Object.entries(zip.files);
+    const batchSize = 500;
+    for (let i = 0; i < entries.length; i += batchSize) {
+      const batch = entries.slice(i, i + batchSize);
+      for (const [path, entry] of batch) {
+        if (!entry.dir) {
+          const ext = path.split('.').pop().toLowerCase();
+          extSet.add(ext);
+          // Read uncompressed size from ZIP metadata without decompressing
+          const uncompressedSize = entry._data
+            ? (entry._data.uncompressedSize || 0)
+            : (entry.comment ? 0 : 0);
+          allFiles.push({ path, entry, size: uncompressedSize });
+        }
+      }
+      if (i % 2000 === 0) {
+        setProgress(80 + Math.round((i / entries.length) * 15), `Indexing… ${i}/${entries.length} entries`);
+        // Yield to keep UI responsive
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    allFiles.sort((a, b) => a.path.localeCompare(b.path));
+
+    setProgress(100, 'Done!');
+    await new Promise(r => setTimeout(r, 200));
+    hideProgress();
+
+    document.getElementById('fi-name').textContent = file.name;
+    document.getElementById('fi-meta').textContent = formatSize(file.size);
+    document.getElementById('fi-count').textContent = allFiles.length + ' files';
+    document.getElementById('file-info').style.display = 'flex';
+    document.getElementById('export-btn').disabled = false;
+    document.getElementById('reset-btn').disabled = false;
+
+    buildFilters(extSet);
+    filteredFiles = [...allFiles];
+    renderFileList();
+    showToast('success', '✓ OBB loaded — ' + allFiles.length + ' files');
+  } catch (e) {
+    hideProgress();
+    showToast('error', '✗ Failed to load: ' + e.message);
+  }
+}
+
+function buildFilters(extSet) {
+  const row = document.getElementById('filter-row');
+  row.innerHTML = '<button class="filter-btn active" data-ext="all" onclick="setFilter(\'all\', this)">All</button>';
+  const groups = { '3D': ['fbx','obj','dae','glb','gltf','blend'], 'Data': ['asset','unity3d','bundle','json','xml','bin','dat','bytes'], 'Image': ['png','jpg','jpeg','webp','tga','ktx','dds'], 'Audio': ['mp3','ogg','wav','m4a'] };
+  const found = {};
+  extSet.forEach(ext => {
+    for (const [g, exts] of Object.entries(groups)) {
+      if (exts.includes(ext)) { found[g] = true; break; }
+    }
+  });
+  for (const g of Object.keys(found)) {
+    const b = document.createElement('button');
+    b.className = 'filter-btn';
+    b.dataset.ext = g;
+    b.textContent = g;
+    b.onclick = function() { setFilter(g, this); };
+    row.appendChild(b);
+  }
+}
+
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterFiles();
+}
+
+function filterFiles() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const groups = { '3D': ['fbx','obj','dae','glb','gltf','blend'], 'Data': ['asset','unity3d','bundle','json','xml','bin','dat','bytes'], 'Image': ['png','jpg','jpeg','webp','tga','ktx','dds'], 'Audio': ['mp3','ogg','wav','m4a'] };
+  filteredFiles = allFiles.filter(f => {
+    const matchQ = !q || f.path.toLowerCase().includes(q);
+    if (!matchQ) return false;
+    if (activeFilter === 'all') return true;
+    const ext = f.path.split('.').pop().toLowerCase();
+    return (groups[activeFilter] || []).includes(ext);
+  });
+  renderFileList();
+}
+
+function renderFileList() {
+  const list = document.getElementById('file-list');
+  document.getElementById('visible-count').textContent = filteredFiles.length;
+  if (!filteredFiles.length) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px;">No files found</div>';
+    return;
+  }
+  list.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  filteredFiles.forEach(f => {
+    const info = getFileInfo(f.path);
+    const name = f.path.split('/').pop();
+    const isModified = !!modifications[f.path];
+    const div = document.createElement('div');
+    div.className = 'file-item' + (selectedFile === f.path ? ' selected' : '') + (isModified ? ' modified' : '');
+    div.innerHTML = `
+      <div class="file-icon ${info.cls}">${info.icon}</div>
+      <div class="file-item-info">
+        <div class="file-item-name">${name}</div>
+        <div class="file-item-meta">${info.label} · ${formatSize(f.size)}</div>
+      </div>
+      ${isModified ? '<div class="mod-dot" title="Modified"></div>' : ''}
+    `;
+    div.onclick = () => selectFile(f.path);
+    frag.appendChild(div);
+  });
+  list.appendChild(frag);
+}
+
+function selectFile(path) {
+  selectedFile = path;
+  renderFileList();
+  showFileDetail(path);
+}
+
+function showFileDetail(path) {
+  const f = allFiles.find(x => x.path === path);
+  if (!f) return;
+  const info = getFileInfo(path);
+  const name = path.split('/').pop();
+  const isModified = !!modifications[path];
+
+  document.getElementById('panel-title').textContent = name;
+  document.getElementById('dl-btn').style.display = '';
+  document.getElementById('replace-btn').style.display = '';
+
+  document.getElementById('detail-area').innerHTML = `
+    <div class="asset-card">
+      <div class="asset-card-header">
+        <div class="big-file-icon ${info.cls}">${info.icon}</div>
+        <div>
+          <h4>${name}</h4>
+          <div class="path">${path}</div>
+        </div>
+        ${isModified ? '<span class="pill" style="margin-left:auto">Modified</span>' : ''}
+      </div>
+      <div class="meta-grid">
+        <div class="meta-item"><label>Type</label><div class="val">${info.label}</div></div>
+        <div class="meta-item"><label>Extension</label><div class="val">.${name.split('.').pop()}</div></div>
+        <div class="meta-item"><label>Size</label><div class="val">${formatSize(f.size)}</div></div>
+        <div class="meta-item"><label>Compressed</label><div class="val">${f.entry.options && f.entry.options.compression ? f.entry.options.compression : 'DEFLATE'}</div></div>
+        <div class="meta-item" style="grid-column:1/-1"><label>Full Path</label><div class="val" style="font-size:11px;word-break:break-all">${path}</div></div>
+        ${isModified ? `<div class="meta-item" style="grid-column:1/-1"><label>Replacement</label><div class="val" style="color:var(--warn)">${modifications[path].name} (${formatSize(modifications[path].size)})</div></div>` : ''}
+      </div>
+      <div class="action-area">
+        <button class="btn btn-success" onclick="downloadSelected()">⬇ Download Original</button>
+        <button class="btn btn-primary" onclick="openReplaceModal()">↺ Replace File</button>
+        ${isModified ? `<button class="btn btn-danger" onclick="clearReplacement('${path}')">✕ Clear Replacement</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+async function downloadSelected() {
+  if (!selectedFile) return;
+  const f = allFiles.find(x => x.path === selectedFile);
+  if (!f) return;
+  try {
+    const blob = await f.entry.async('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = selectedFile.split('/').pop();
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('success', '✓ Downloaded');
+  } catch (e) {
+    showToast('error', '✗ ' + e.message);
+  }
+}
+
+function openReplaceModal() {
+  if (!selectedFile) return;
+  document.getElementById('replace-target').textContent = selectedFile.split('/').pop();
+  document.getElementById('replace-file-name').style.display = 'none';
+  document.getElementById('replace-file-name').textContent = '';
+  document.getElementById('replace-input').value = '';
+  document.getElementById('confirm-replace-btn').disabled = true;
+  pendingReplaceFile = null;
+  document.getElementById('replace-modal').classList.add('show');
+}
+
+function closeReplaceModal() {
+  document.getElementById('replace-modal').classList.remove('show');
+}
+
+function onReplaceFileChosen(input) {
+  if (!input.files[0]) return;
+  pendingReplaceFile = input.files[0];
+  const el = document.getElementById('replace-file-name');
+  el.textContent = '✓ ' + pendingReplaceFile.name + ' (' + formatSize(pendingReplaceFile.size) + ')';
+  el.style.display = 'block';
+  document.getElementById('confirm-replace-btn').disabled = false;
+}
+
+async function confirmReplace() {
+  if (!pendingReplaceFile || !selectedFile) return;
+  const buf = await pendingReplaceFile.arrayBuffer();
+  zip.file(selectedFile, buf);
+  modifications[selectedFile] = { name: pendingReplaceFile.name, size: pendingReplaceFile.size };
+  // Update size in allFiles
+  const f = allFiles.find(x => x.path === selectedFile);
+  if (f) f.size = pendingReplaceFile.size;
+  closeReplaceModal();
+  renderFileList();
+  showFileDetail(selectedFile);
+  showToast('success', '✓ Replaced: ' + selectedFile.split('/').pop());
+}
+
+function clearReplacement(path) {
+  delete modifications[path];
+  renderFileList();
+  showFileDetail(path);
+  showToast('info', 'Replacement cleared');
+}
+
+async function exportOBB() {
+  if (!zip) return;
+  const compressionMode = useCompression ? 'DEFLATE' : 'STORE';
+  const compressionLevel = useCompression ? 6 : 0;
+
+  showProgress(`Building OBB (${compressionMode} mode)…`);
+  try {
+    let lastUpdate = Date.now();
+    const blob = await zip.generateAsync({
+      type: 'blob',
+      compression: compressionMode,
+      compressionOptions: { level: compressionLevel },
+      // Enable ZIP64 extensions for files > 2GB
+      platform: 'UNIX',
+    }, (meta) => {
+      const now = Date.now();
+      // Throttle UI updates to every 100ms for performance
+      if (now - lastUpdate > 100) {
+        lastUpdate = now;
+        const pct = Math.round(meta.percent);
+        const currentFile = meta.currentFile ? meta.currentFile.split('/').pop() : '';
+        setProgress(pct, `${compressionMode} ${pct}% ${currentFile ? '— ' + currentFile : ''}`);
+      }
+    });
+
+    hideProgress();
+
+    // Use streaming download via URL object for large files
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const origName = document.getElementById('fi-name').textContent;
+    a.download = origName.replace(/\.obb$/i, '_modified.obb') || 'modified.obb';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Delay revoke to ensure download starts
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    const modCount = Object.keys(modifications).length;
+    showToast('success', `✓ OBB exported! ${formatSize(blob.size)}${modCount ? ' · ' + modCount + ' modified' : ''}`);
+  } catch (e) {
+    hideProgress();
+    showToast('error', '✗ Export failed: ' + e.message);
+  }
+}
+
+function resetAll() {
+  if (!confirm('Reset everything? All replacements will be lost.')) return;
+  zip = null; allFiles = []; filteredFiles = []; selectedFile = null; modifications = {};
+  document.getElementById('file-list').innerHTML = '';
+  document.getElementById('fi-name').textContent = '—';
+  document.getElementById('fi-meta').textContent = '—';
+  document.getElementById('fi-count').textContent = '0 files';
+  document.getElementById('file-info').style.display = 'none';
+  document.getElementById('export-btn').disabled = true;
+  document.getElementById('reset-btn').disabled = true;
+  document.getElementById('panel-title').textContent = 'Select a file from the list';
+  document.getElementById('dl-btn').style.display = 'none';
+  document.getElementById('replace-btn').style.display = 'none';
+  document.getElementById('detail-area').innerHTML = `<div class="empty-state"><div class="big-icon">🗂️</div><p>Load an OBB file to get started.<br>All processing happens locally in your browser.</p></div>`;
+  document.getElementById('visible-count').textContent = '0';
+  document.getElementById('filter-row').innerHTML = '<button class="filter-btn active" data-ext="all" onclick="setFilter(\'all\', this)">All</button>';
+  fileInput.value = '';
+  showToast('info', 'Reset complete');
+}
+
+// PROGRESS
+function showProgress(msg) {
+  document.getElementById('progress-title').textContent = msg;
+  document.getElementById('progress-label').textContent = msg;
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-modal').classList.add('show');
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = Math.min(100, pct) + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+function hideProgress() {
+  document.getElementById('progress-modal').classList.remove('show');
+}
+
+// TOAST
+function showToast(type, msg) {
+  const icons = { success: '✓', error: '✗', info: 'ℹ' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+</script>
+</body>
+</html>
