@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OBB Asset Editor v2.0</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- No external dependencies: custom ZIP parser handles everything -->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
@@ -715,32 +715,419 @@
 <div class="toast-container" id="toast-container"></div>
 
 <script>
-let zip = null;
-let allFiles = [];
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOM ZIP ENGINE — never loads the full file into RAM
+// Reads Central Directory only (~last 64 KB), then slices on demand.
+// Supports ZIP32, ZIP64, STORE and DEFLATE entries up to 3 GB.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let obbFile    = null;   // original File object (never fully read)
+let allFiles   = [];     // array of ZipEntry objects
 let filteredFiles = [];
-let selectedFile = null;
-let modifications = {};
+let selectedFile  = null;
+let modifications = {};  // path → { file: File, name, size }
 let pendingReplaceFile = null;
 let activeFilter = 'all';
-let useCompression = false; // STORE mode by default for maximum speed
+let useCompression = false;
+
+// ── ZipEntry: metadata only, extract on demand via File.slice ──
+class ZipEntry {
+  constructor(path, compMethod, compSize, uncompSize, dataOffset, crc32) {
+    this.path        = path;
+    this.compMethod  = compMethod;   // 0=STORE, 8=DEFLATE
+    this.compSize    = compSize;
+    this.size        = uncompSize;
+    this.dataOffset  = dataOffset;   // byte offset of compressed data in file
+    this.crc32       = crc32;
+  }
+
+  // Read compressed bytes by slicing the original File — no full-file load
+  async readCompressed() {
+    const slice = obbFile.slice(this.dataOffset, this.dataOffset + this.compSize);
+    return new Uint8Array(await slice.arrayBuffer());
+  }
+
+  // Decompress and return Uint8Array of original data
+  async decompress() {
+    const comp = await this.readCompressed();
+    if (this.compMethod === 0) return comp; // STORE — already raw
+    // DEFLATE: wrap in a proper gzip stream and use DecompressionStream
+    const ds = new DecompressionStream('deflate-raw');
+    const writer = ds.writable.getWriter();
+    writer.write(comp);
+    writer.close();
+    const chunks = [];
+    const reader = ds.readable.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const total = chunks.reduce((s, c) => s + c.length, 0);
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const c of chunks) { out.set(c, pos); pos += c.length; }
+    return out;
+  }
+
+  async toBlob(mimeType) {
+    const data = await this.decompress();
+    return new Blob([data], { type: mimeType || 'application/octet-stream' });
+  }
+}
+
+// ── Read a little-endian integer from a DataView ──
+function readU16(dv, off) { return dv.getUint16(off, true); }
+function readU32(dv, off) { return dv.getUint32(off, true); }
+function readU64(dv, off) {
+  const lo = dv.getUint32(off, true);
+  const hi = dv.getUint32(off + 4, true);
+  return hi * 0x100000000 + lo;
+}
+
+// ── Parse ZIP Central Directory from a File object ──
+async function parseZipCentralDirectory(file) {
+  const EOCD_SIG    = 0x06054b50;
+  const EOCD64_SIG  = 0x06064b50;
+  const CD_SIG      = 0x02014b50;
+  const LFH_SIG     = 0x04034b50;
+
+  // Read last 64 KB to find EOCD
+  const tailSize = Math.min(65536 + 22, file.size);
+  const tailBuf  = await file.slice(file.size - tailSize).arrayBuffer();
+  const tailDV   = new DataView(tailBuf);
+
+  let eocdOff = -1;
+  for (let i = tailBuf.byteLength - 22; i >= 0; i--) {
+    if (tailDV.getUint32(i, true) === EOCD_SIG) { eocdOff = i; break; }
+  }
+  if (eocdOff < 0) throw new Error('Not a valid ZIP/OBB file (EOCD not found)');
+
+  const fileEocdOff = file.size - tailSize + eocdOff;
+
+  let cdOffset, cdSize, totalEntries;
+
+  // Check for ZIP64
+  const eocd32Entries = tailDV.getUint16(eocdOff + 10, true);
+  const eocd32CDOff   = tailDV.getUint32(eocdOff + 16, true);
+
+  if (eocd32CDOff === 0xFFFFFFFF || eocd32Entries === 0xFFFF) {
+    // ZIP64: locator is 20 bytes before EOCD
+    const loc64Off = fileEocdOff - 20;
+    const loc64Buf = await file.slice(loc64Off, loc64Off + 20).arrayBuffer();
+    const loc64DV  = new DataView(loc64Buf);
+    const eocd64AbsOff = readU64(loc64DV, 8);
+    const eocd64Buf = await file.slice(eocd64AbsOff, eocd64AbsOff + 56).arrayBuffer();
+    const eocd64DV  = new DataView(eocd64Buf);
+    if (readU32(eocd64DV, 0) !== EOCD64_SIG) throw new Error('ZIP64 EOCD signature mismatch');
+    totalEntries = readU64(eocd64DV, 32);
+    cdSize       = readU64(eocd64DV, 40);
+    cdOffset     = readU64(eocd64DV, 48);
+  } else {
+    totalEntries = eocd32Entries;
+    cdSize       = tailDV.getUint32(eocdOff + 12, true);
+    cdOffset     = eocd32CDOff;
+  }
+
+  // Read the entire Central Directory in one slice
+  setProgress(20, `Parsing Central Directory… (${formatSize(cdSize)})`);
+  const cdBuf = await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer();
+  const cdDV  = new DataView(cdBuf);
+
+  const entries = [];
+  let pos = 0;
+  let parsed = 0;
+
+  while (pos < cdBuf.byteLength) {
+    if (cdDV.getUint32(pos, true) !== CD_SIG) break;
+
+    const compMethod  = readU16(cdDV, pos + 10);
+    let   compSize    = readU32(cdDV, pos + 20);
+    let   uncompSize  = readU32(cdDV, pos + 24);
+    let   localOff    = readU32(cdDV, pos + 42);
+    const crc32       = readU32(cdDV, pos + 16);
+    const fnLen       = readU16(cdDV, pos + 28);
+    const extraLen    = readU16(cdDV, pos + 30);
+    const cmtLen      = readU16(cdDV, pos + 32);
+    const flags       = readU16(cdDV, pos + 8);
+
+    const fnBytes = new Uint8Array(cdBuf, pos + 46, fnLen);
+    const path    = new TextDecoder('utf-8').decode(fnBytes);
+
+    // ZIP64 extra field
+    if (compSize === 0xFFFFFFFF || uncompSize === 0xFFFFFFFF || localOff === 0xFFFFFFFF) {
+      let exOff = pos + 46 + fnLen;
+      const exEnd = exOff + extraLen;
+      while (exOff + 4 <= exEnd) {
+        const tag = readU16(cdDV, exOff);
+        const sz  = readU16(cdDV, exOff + 2);
+        if (tag === 0x0001) {
+          let q = exOff + 4;
+          if (uncompSize === 0xFFFFFFFF) { uncompSize = readU64(cdDV, q); q += 8; }
+          if (compSize   === 0xFFFFFFFF) { compSize   = readU64(cdDV, q); q += 8; }
+          if (localOff   === 0xFFFFFFFF) { localOff   = readU64(cdDV, q); }
+          break;
+        }
+        exOff += 4 + sz;
+      }
+    }
+
+    const isDir = path.endsWith('/') || (flags & 0x10);
+    if (!isDir) {
+      // We need the actual data offset: LFH + name/extra lengths
+      // Read LFH header (30 bytes) to get variable lengths
+      const lfhBuf  = await file.slice(localOff, localOff + 30).arrayBuffer();
+      const lfhDV   = new DataView(lfhBuf);
+      const lfnLen  = readU16(lfhDV, 26);
+      const lexLen  = readU16(lfhDV, 28);
+      const dataOff = localOff + 30 + lfnLen + lexLen;
+
+      entries.push(new ZipEntry(path, compMethod, compSize, uncompSize, dataOff, crc32));
+    }
+
+    pos += 46 + fnLen + extraLen + cmtLen;
+    parsed++;
+
+    if (parsed % 200 === 0) {
+      const pct = 20 + Math.round((parsed / totalEntries) * 70);
+      setProgress(pct, `Indexing ${parsed} / ${totalEntries} entries…`);
+      await new Promise(r => setTimeout(r, 0)); // yield
+    }
+  }
+
+  return entries;
+}
+
+// ── Build a new ZIP from scratch (STORE or DEFLATE), streaming into a Blob ──
+async function buildZip(entries, mods, compression) {
+  // We'll accumulate parts as ArrayBuffer/Uint8Array pieces
+  // and build the central directory alongside
+  const parts = [];
+  const cdRecords = [];
+  let offset = 0;
+
+  const enc = new TextEncoder();
+  const totalEntries = entries.length;
+
+  for (let i = 0; i < totalEntries; i++) {
+    const entry = entries[i];
+    const mod   = mods[entry.path];
+
+    // Throttle progress updates
+    if (i % 50 === 0) {
+      const pct = Math.round((i / totalEntries) * 90);
+      setProgress(pct, `Writing ${i}/${totalEntries} — ${entry.path.split('/').pop()}`);
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    let data; // Uint8Array of uncompressed data
+    let compData; // Uint8Array of data to store
+    let method;
+    let crc;
+
+    if (mod) {
+      // Read replacement file
+      data = new Uint8Array(await mod.file.arrayBuffer());
+    } else {
+      // Read from original OBB
+      data = await entry.decompress();
+    }
+
+    // Compute CRC32
+    crc = crc32(data);
+
+    if (compression === 'DEFLATE') {
+      // Compress with DeflateRaw
+      const cs = new CompressionStream('deflate-raw');
+      const writer = cs.writable.getWriter();
+      writer.write(data);
+      writer.close();
+      const chunks = [];
+      const reader = cs.readable.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      compData = new Uint8Array(total);
+      let p = 0;
+      for (const c of chunks) { compData.set(c, p); p += c.length; }
+      method = 8;
+    } else {
+      compData = data;
+      method = 0;
+    }
+
+    const pathBytes   = enc.encode(entry.path);
+    const use64       = offset > 0xFFFFFFFE || data.length > 0xFFFFFFFE || compData.length > 0xFFFFFFFE;
+
+    // Extra field for ZIP64 if needed
+    let extraLFH = new Uint8Array(0);
+    if (use64) {
+      extraLFH = new Uint8Array(20);
+      const dv = new DataView(extraLFH.buffer);
+      dv.setUint16(0, 0x0001, true);
+      dv.setUint16(2, 16, true);
+      setU64(dv, 4, data.length);
+      setU64(dv, 12, compData.length);
+    }
+
+    // Local File Header
+    const lfh = new Uint8Array(30 + pathBytes.length + extraLFH.length);
+    const ldv = new DataView(lfh.buffer);
+    ldv.setUint32(0, 0x04034b50, true);
+    ldv.setUint16(4, use64 ? 45 : 20, true);  // version needed
+    ldv.setUint16(6, 0, true);                  // flags
+    ldv.setUint16(8, method, true);
+    ldv.setUint32(10, 0, true);                 // mod time
+    ldv.setUint32(14, crc, true);
+    ldv.setUint32(18, use64 ? 0xFFFFFFFF : compData.length, true);
+    ldv.setUint32(22, use64 ? 0xFFFFFFFF : data.length, true);
+    ldv.setUint16(26, pathBytes.length, true);
+    ldv.setUint16(28, extraLFH.length, true);
+    lfh.set(pathBytes, 30);
+    lfh.set(extraLFH, 30 + pathBytes.length);
+
+    // Central Directory record for this entry
+    const extraCD = new Uint8Array(use64 ? 28 : 0);
+    if (use64) {
+      const dv = new DataView(extraCD.buffer);
+      dv.setUint16(0, 0x0001, true);
+      dv.setUint16(2, 24, true);
+      setU64(dv, 4, data.length);
+      setU64(dv, 12, compData.length);
+      setU64(dv, 20, offset);
+    }
+
+    const cd = new Uint8Array(46 + pathBytes.length + extraCD.length);
+    const cdv = new DataView(cd.buffer);
+    cdv.setUint32(0, 0x02014b50, true);
+    cdv.setUint16(4, 0x0314, true);  // version made by (Unix, 2.0)
+    cdv.setUint16(6, use64 ? 45 : 20, true);
+    cdv.setUint16(8, 0, true);
+    cdv.setUint16(10, method, true);
+    cdv.setUint32(12, 0, true);
+    cdv.setUint32(16, crc, true);
+    cdv.setUint32(20, use64 ? 0xFFFFFFFF : compData.length, true);
+    cdv.setUint32(24, use64 ? 0xFFFFFFFF : data.length, true);
+    cdv.setUint16(28, pathBytes.length, true);
+    cdv.setUint16(30, extraCD.length, true);
+    cdv.setUint16(32, 0, true);  // comment len
+    cdv.setUint16(34, 0, true);  // disk start
+    cdv.setUint16(36, 0, true);  // int attribs
+    cdv.setUint32(38, 0, true);  // ext attribs
+    cdv.setUint32(42, use64 ? 0xFFFFFFFF : offset, true);
+    cd.set(pathBytes, 46);
+    cd.set(extraCD, 46 + pathBytes.length);
+
+    parts.push(lfh, compData);
+    cdRecords.push(cd);
+    offset += lfh.length + compData.length;
+  }
+
+  setProgress(92, 'Writing central directory…');
+  await new Promise(r => setTimeout(r, 0));
+
+  // Concatenate CD records
+  const cdSize = cdRecords.reduce((s, c) => s + c.length, 0);
+  const needsZip64 = offset > 0xFFFFFFFE || totalEntries > 0xFFFE || cdSize > 0xFFFFFFFE;
+
+  const cdBuf = new Uint8Array(cdSize);
+  let cdPos = 0;
+  for (const r of cdRecords) { cdBuf.set(r, cdPos); cdPos += r.length; }
+
+  let trailer;
+  if (needsZip64) {
+    // ZIP64 EOCD (56) + ZIP64 EOCD locator (20) + EOCD (22) = 98 bytes
+    trailer = new Uint8Array(98);
+    const tv = new DataView(trailer.buffer);
+    // ZIP64 EOCD
+    tv.setUint32(0, 0x06064b50, true);
+    setU64(tv, 4, 44);               // size of zip64 EOCD record - 12
+    tv.setUint16(12, 0x0314, true);
+    tv.setUint16(14, 45, true);
+    tv.setUint32(16, 0, true);
+    tv.setUint32(20, 0, true);
+    setU64(tv, 24, totalEntries);
+    setU64(tv, 32, totalEntries);
+    setU64(tv, 40, cdSize);
+    setU64(tv, 48, offset);
+    // ZIP64 EOCD locator
+    tv.setUint32(56, 0x07064b50, true);
+    tv.setUint32(60, 0, true);
+    setU64(tv, 64, offset + cdSize);
+    tv.setUint32(72, 1, true);
+    // EOCD
+    tv.setUint32(76, 0x06054b50, true);
+    tv.setUint16(80, 0, true);
+    tv.setUint16(82, 0, true);
+    tv.setUint16(84, Math.min(totalEntries, 0xFFFF), true);
+    tv.setUint16(86, Math.min(totalEntries, 0xFFFF), true);
+    tv.setUint32(88, Math.min(cdSize, 0xFFFFFFFF), true);
+    tv.setUint32(92, Math.min(offset, 0xFFFFFFFF), true);
+    tv.setUint16(96, 0, true);
+  } else {
+    trailer = new Uint8Array(22);
+    const tv = new DataView(trailer.buffer);
+    tv.setUint32(0, 0x06054b50, true);
+    tv.setUint16(4, 0, true);
+    tv.setUint16(6, 0, true);
+    tv.setUint16(8, totalEntries, true);
+    tv.setUint16(10, totalEntries, true);
+    tv.setUint32(12, cdSize, true);
+    tv.setUint32(16, offset, true);
+    tv.setUint16(20, 0, true);
+  }
+
+  setProgress(97, 'Creating download blob…');
+  await new Promise(r => setTimeout(r, 0));
+
+  return new Blob([...parts, cdBuf, trailer], { type: 'application/zip' });
+}
+
+function setU64(dv, off, val) {
+  const lo = val >>> 0;
+  const hi = Math.floor(val / 0x100000000) >>> 0;
+  dv.setUint32(off, lo, true);
+  dv.setUint32(off + 4, hi, true);
+}
+
+// CRC32 table
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function crc32(data) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) c = CRC_TABLE[(c ^ data[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
 
 function toggleCompression() {
   useCompression = !useCompression;
   const btn = document.getElementById('compress-toggle');
   if (useCompression) {
     btn.textContent = '🗜 DEFLATE';
-    btn.title = 'Currently: DEFLATE compression (smaller file, slower). Click for STORE mode.';
+    btn.title = 'Currently: DEFLATE (smaller, slower). Click for STORE.';
     btn.style.color = 'var(--warn)';
     btn.style.borderColor = 'var(--warn)';
   } else {
     btn.textContent = '⚡ STORE';
-    btn.title = 'Currently: STORE mode (no compression, fastest). Click for DEFLATE.';
+    btn.title = 'Currently: STORE (fastest, no recompression). Click for DEFLATE.';
     btn.style.color = '';
     btn.style.borderColor = '';
   }
-  showToast('info', useCompression ? '🗜 Export mode: DEFLATE (compressed)' : '⚡ Export mode: STORE (fast, no recompression)');
+  showToast('info', useCompression ? '🗜 Export mode: DEFLATE' : '⚡ Export mode: STORE (fast)');
 }
 
+// ── File type metadata ──
 const EXT_MAP = {
   fbx: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
   obj: { icon: '🧊', cls: 'icon-3d', label: '3D Model' },
@@ -775,120 +1162,65 @@ function getFileInfo(name) {
 }
 
 function formatSize(bytes) {
+  if (bytes === 0 || !bytes) return '0 B';
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
   if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + ' MB';
   return (bytes / 1073741824).toFixed(3) + ' GB';
 }
 
-// DROP ZONE
-const dropzone = document.getElementById('dropzone');
+// ── DROP ZONE ──
+const dropzone  = document.getElementById('dropzone');
 const fileInput = document.getElementById('file-input');
 
-dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('dragover'); });
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
 dropzone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropzone.classList.remove('dragover');
+  e.preventDefault(); dropzone.classList.remove('dragover');
   if (e.dataTransfer.files[0]) loadOBB(e.dataTransfer.files[0]);
 });
 dropzone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadOBB(fileInput.files[0]); });
 
 async function loadOBB(file) {
-  // 3 GB limit
-  const MAX_SIZE = 3 * 1024 * 1024 * 1024;
-  if (file.size > MAX_SIZE) {
-    showToast('error', '✗ File exceeds 3 GB limit (' + formatSize(file.size) + ')');
+  const MAX = 3 * 1024 * 1024 * 1024;
+  if (file.size > MAX) {
+    showToast('error', `✗ File exceeds 3 GB limit (${formatSize(file.size)})`);
     return;
   }
 
-  showProgress('Loading OBB…');
+  obbFile = file;
+  showProgress('Parsing OBB structure…');
+
   try {
-    setProgress(5, 'Reading file…');
+    setProgress(5, `Reading directory… (${formatSize(file.size)} file)`);
+    // parse only reads the Central Directory — no full-file load!
+    const entries = await parseZipCentralDirectory(file);
 
-    // Use chunked streaming read for faster memory allocation on large files
-    const CHUNK = 64 * 1024 * 1024; // 64 MB chunks
-    let buf;
-    if (file.size > CHUNK) {
-      // Stream in chunks, report progress
-      const chunks = [];
-      let offset = 0;
-      while (offset < file.size) {
-        const slice = file.slice(offset, offset + CHUNK);
-        const chunk = await slice.arrayBuffer();
-        chunks.push(new Uint8Array(chunk));
-        offset += CHUNK;
-        const readPct = Math.min(25, Math.round((offset / file.size) * 25));
-        setProgress(readPct, `Reading… ${formatSize(Math.min(offset, file.size))} / ${formatSize(file.size)}`);
-      }
-      // Combine chunks into single buffer
-      const total = chunks.reduce((s, c) => s + c.byteLength, 0);
-      const combined = new Uint8Array(total);
-      let pos = 0;
-      for (const c of chunks) { combined.set(c, pos); pos += c.byteLength; }
-      buf = combined.buffer;
-    } else {
-      buf = await file.arrayBuffer();
-    }
-
-    setProgress(28, 'Parsing ZIP structure…');
-
-    // Load with zip64 support enabled for large files
-    zip = await JSZip.loadAsync(buf, {
-      checkCRC32: false, // skip CRC verification for faster load
-      optimizedBinaryString: false,
-      createFolders: false,
-    });
-
-    setProgress(80, 'Indexing files…');
-
-    allFiles = [];
-    const extSet = new Set();
-
-    // Batch index entries without extracting data (lazy)
-    const entries = Object.entries(zip.files);
-    const batchSize = 500;
-    for (let i = 0; i < entries.length; i += batchSize) {
-      const batch = entries.slice(i, i + batchSize);
-      for (const [path, entry] of batch) {
-        if (!entry.dir) {
-          const ext = path.split('.').pop().toLowerCase();
-          extSet.add(ext);
-          // Read uncompressed size from ZIP metadata without decompressing
-          const uncompressedSize = entry._data
-            ? (entry._data.uncompressedSize || 0)
-            : (entry.comment ? 0 : 0);
-          allFiles.push({ path, entry, size: uncompressedSize });
-        }
-      }
-      if (i % 2000 === 0) {
-        setProgress(80 + Math.round((i / entries.length) * 15), `Indexing… ${i}/${entries.length} entries`);
-        // Yield to keep UI responsive
-        await new Promise(r => setTimeout(r, 0));
-      }
-    }
-
+    allFiles = entries;
     allFiles.sort((a, b) => a.path.localeCompare(b.path));
 
+    const extSet = new Set(allFiles.map(f => f.path.split('.').pop().toLowerCase()));
+
     setProgress(100, 'Done!');
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 150));
     hideProgress();
 
-    document.getElementById('fi-name').textContent = file.name;
-    document.getElementById('fi-meta').textContent = formatSize(file.size);
+    document.getElementById('fi-name').textContent  = file.name;
+    document.getElementById('fi-meta').textContent  = formatSize(file.size);
     document.getElementById('fi-count').textContent = allFiles.length + ' files';
     document.getElementById('file-info').style.display = 'flex';
-    document.getElementById('export-btn').disabled = false;
-    document.getElementById('reset-btn').disabled = false;
+    document.getElementById('export-btn').disabled  = false;
+    document.getElementById('reset-btn').disabled   = false;
 
     buildFilters(extSet);
     filteredFiles = [...allFiles];
     renderFileList();
-    showToast('success', '✓ OBB loaded — ' + allFiles.length + ' files');
+    showToast('success', `✓ OBB indexed — ${allFiles.length} files (${formatSize(file.size)})`);
   } catch (e) {
     hideProgress();
-    showToast('error', '✗ Failed to load: ' + e.message);
+    showToast('error', '✗ Failed: ' + e.message);
+    console.error(e);
   }
 }
 
@@ -992,7 +1324,8 @@ function showFileDetail(path) {
         <div class="meta-item"><label>Type</label><div class="val">${info.label}</div></div>
         <div class="meta-item"><label>Extension</label><div class="val">.${name.split('.').pop()}</div></div>
         <div class="meta-item"><label>Size</label><div class="val">${formatSize(f.size)}</div></div>
-        <div class="meta-item"><label>Compressed</label><div class="val">${f.entry.options && f.entry.options.compression ? f.entry.options.compression : 'DEFLATE'}</div></div>
+        <div class="meta-item"><label>Comp. Size</label><div class="val">${formatSize(f.compSize)}</div></div>
+        <div class="meta-item"><label>Method</label><div class="val">${f.compMethod === 0 ? 'STORE' : f.compMethod === 8 ? 'DEFLATE' : 'Method '+f.compMethod}</div></div>
         <div class="meta-item" style="grid-column:1/-1"><label>Full Path</label><div class="val" style="font-size:11px;word-break:break-all">${path}</div></div>
         ${isModified ? `<div class="meta-item" style="grid-column:1/-1"><label>Replacement</label><div class="val" style="color:var(--warn)">${modifications[path].name} (${formatSize(modifications[path].size)})</div></div>` : ''}
       </div>
@@ -1009,15 +1342,16 @@ async function downloadSelected() {
   if (!selectedFile) return;
   const f = allFiles.find(x => x.path === selectedFile);
   if (!f) return;
+  const name = selectedFile.split('/').pop();
   try {
-    const blob = await f.entry.async('blob');
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = selectedFile.split('/').pop();
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('success', '✓ Downloaded');
+    showToast('info', `⬇ Extracting ${name}…`);
+    const blob = await f.toBlob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    showToast('success', `✓ Downloaded: ${name} (${formatSize(blob.size)})`);
   } catch (e) {
     showToast('error', '✗ ' + e.message);
   }
@@ -1049,16 +1383,14 @@ function onReplaceFileChosen(input) {
 
 async function confirmReplace() {
   if (!pendingReplaceFile || !selectedFile) return;
-  const buf = await pendingReplaceFile.arrayBuffer();
-  zip.file(selectedFile, buf);
-  modifications[selectedFile] = { name: pendingReplaceFile.name, size: pendingReplaceFile.size };
-  // Update size in allFiles
+  modifications[selectedFile] = { file: pendingReplaceFile, name: pendingReplaceFile.name, size: pendingReplaceFile.size };
+  // Update display size in allFiles
   const f = allFiles.find(x => x.path === selectedFile);
   if (f) f.size = pendingReplaceFile.size;
   closeReplaceModal();
   renderFileList();
   showFileDetail(selectedFile);
-  showToast('success', '✓ Replaced: ' + selectedFile.split('/').pop());
+  showToast('success', '✓ Replacement queued: ' + selectedFile.split('/').pop());
 }
 
 function clearReplacement(path) {
@@ -1069,55 +1401,31 @@ function clearReplacement(path) {
 }
 
 async function exportOBB() {
-  if (!zip) return;
+  if (!allFiles.length) return;
   const compressionMode = useCompression ? 'DEFLATE' : 'STORE';
-  const compressionLevel = useCompression ? 6 : 0;
-
-  showProgress(`Building OBB (${compressionMode} mode)…`);
+  showProgress(`Building OBB (${compressionMode})…`);
   try {
-    let lastUpdate = Date.now();
-    const blob = await zip.generateAsync({
-      type: 'blob',
-      compression: compressionMode,
-      compressionOptions: { level: compressionLevel },
-      // Enable ZIP64 extensions for files > 2GB
-      platform: 'UNIX',
-    }, (meta) => {
-      const now = Date.now();
-      // Throttle UI updates to every 100ms for performance
-      if (now - lastUpdate > 100) {
-        lastUpdate = now;
-        const pct = Math.round(meta.percent);
-        const currentFile = meta.currentFile ? meta.currentFile.split('/').pop() : '';
-        setProgress(pct, `${compressionMode} ${pct}% ${currentFile ? '— ' + currentFile : ''}`);
-      }
-    });
-
+    const blob = await buildZip(allFiles, modifications, compressionMode);
     hideProgress();
-
-    // Use streaming download via URL object for large files
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     a.href = url;
     const origName = document.getElementById('fi-name').textContent;
     a.download = origName.replace(/\.obb$/i, '_modified.obb') || 'modified.obb';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Delay revoke to ensure download starts
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
     const modCount = Object.keys(modifications).length;
     showToast('success', `✓ OBB exported! ${formatSize(blob.size)}${modCount ? ' · ' + modCount + ' modified' : ''}`);
   } catch (e) {
     hideProgress();
     showToast('error', '✗ Export failed: ' + e.message);
+    console.error(e);
   }
 }
 
 function resetAll() {
   if (!confirm('Reset everything? All replacements will be lost.')) return;
-  zip = null; allFiles = []; filteredFiles = []; selectedFile = null; modifications = {};
+  obbFile = null; allFiles = []; filteredFiles = []; selectedFile = null; modifications = {};
   document.getElementById('file-list').innerHTML = '';
   document.getElementById('fi-name').textContent = '—';
   document.getElementById('fi-meta').textContent = '—';
