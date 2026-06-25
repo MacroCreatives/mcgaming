@@ -635,6 +635,7 @@
     <button class="btn btn-primary" id="export-btn" disabled onclick="exportOBB()">⬇ Export OBB</button>
     <button class="btn btn-ghost" id="compress-toggle" onclick="toggleCompression()" title="Toggle compression mode">⚡ STORE</button>
     <button class="btn btn-ghost" id="reset-btn" disabled onclick="resetAll()">✕ Reset</button>
+    <button class="btn btn-ghost" id="diag-btn" onclick="diagnoseFile()" title="Diagnose file format">🔍 Diagnose</button>
   </div>
 
   <!-- SIDEBAR -->
@@ -792,106 +793,169 @@ async function parseZipCentralDirectory(file) {
   const CD_SIG      = 0x02014b50;
   const LFH_SIG     = 0x04034b50;
 
-  // Read last 64 KB to find EOCD
-  const tailSize = Math.min(65536 + 22, file.size);
-  const tailBuf  = await file.slice(file.size - tailSize).arrayBuffer();
-  const tailDV   = new DataView(tailBuf);
+  // ── Strategy 1: scan last 1 MB for EOCD (handles large comments + APK signing blocks)
+  const scanSize = Math.min(1 * 1024 * 1024, file.size);
+  setProgress(5, `Scanning last ${formatSize(scanSize)} for EOCD signature…`);
+  const tailBuf = await file.slice(file.size - scanSize).arrayBuffer();
+  const tailDV  = new DataView(tailBuf);
 
+  // Scan backwards for EOCD signature (0x504b0506 in little-endian = 0x06054b50)
   let eocdOff = -1;
   for (let i = tailBuf.byteLength - 22; i >= 0; i--) {
-    if (tailDV.getUint32(i, true) === EOCD_SIG) { eocdOff = i; break; }
+    if (tailDV.getUint32(i, true) === EOCD_SIG) {
+      // Validate: comment length field should match remaining bytes
+      const cmtLen = tailDV.getUint16(i + 20, true);
+      if (i + 22 + cmtLen <= tailBuf.byteLength) {
+        eocdOff = i;
+        break;
+      }
+    }
   }
-  if (eocdOff < 0) throw new Error('Not a valid ZIP/OBB file (EOCD not found)');
 
-  const fileEocdOff = file.size - tailSize + eocdOff;
+  // ── Strategy 2: if still not found, scan last 8 MB (very large comment or signing block)
+  if (eocdOff < 0 && file.size > scanSize) {
+    setProgress(10, 'Scanning last 8 MB for EOCD (extended search)…');
+    const bigScan = Math.min(8 * 1024 * 1024, file.size);
+    const bigBuf  = await file.slice(file.size - bigScan).arrayBuffer();
+    const bigDV   = new DataView(bigBuf);
+    for (let i = bigBuf.byteLength - 22; i >= 0; i--) {
+      if (bigDV.getUint32(i, true) === EOCD_SIG) {
+        const cmtLen = bigDV.getUint16(i + 20, true);
+        if (i + 22 + cmtLen <= bigBuf.byteLength) {
+          // rebuild tailDV from this bigger buffer
+          const newTailDV = bigDV;
+          eocdOff = i;
+          // re-assign so the code below uses the right buffer/view
+          Object.assign(tailDV, {}); // won't work directly; use a flag
+          // Use a separate path: re-parse from bigBuf
+          return await _parseCDFromBuffer(file, bigBuf, bigDV, i, file.size - bigScan);
+        }
+      }
+    }
+  }
+
+  if (eocdOff < 0) {
+    // ── Strategy 3: check if file starts with PK (LFH) but EOCD is missing/corrupt
+    const headBuf = await file.slice(0, 4).arrayBuffer();
+    const headSig = new DataView(headBuf).getUint32(0, true);
+    if (headSig === LFH_SIG) {
+      throw new Error('ZIP structure found but EOCD is missing or beyond 8 MB from end. File may be corrupt or use an unsupported format.');
+    }
+    // Dump first 8 bytes as hex for diagnosis
+    const diagBuf = await file.slice(0, 8).arrayBuffer();
+    const diagArr = new Uint8Array(diagBuf);
+    const hex = Array.from(diagArr).map(b => b.toString(16).padStart(2,'0')).join(' ');
+    throw new Error(`Not a valid ZIP/OBB file. First bytes: ${hex}`);
+  }
+
+  return await _parseCDFromBuffer(file, tailBuf, tailDV, eocdOff, file.size - scanSize);
+}
+
+async function _parseCDFromBuffer(file, buf, dv, eocdOff, bufBaseOffset) {
+  const EOCD64_SIG = 0x06064b50;
+  const CD_SIG     = 0x02014b50;
+  const LFH_SIG    = 0x04034b50;
+
+  const fileEocdOff = bufBaseOffset + eocdOff;
 
   let cdOffset, cdSize, totalEntries;
 
-  // Check for ZIP64
-  const eocd32Entries = tailDV.getUint16(eocdOff + 10, true);
-  const eocd32CDOff   = tailDV.getUint32(eocdOff + 16, true);
+  const eocd32Entries = dv.getUint16(eocdOff + 10, true);
+  const eocd32CDSize  = dv.getUint32(eocdOff + 12, true);
+  const eocd32CDOff   = dv.getUint32(eocdOff + 16, true);
 
-  if (eocd32CDOff === 0xFFFFFFFF || eocd32Entries === 0xFFFF) {
-    // ZIP64: locator is 20 bytes before EOCD
-    const loc64Off = fileEocdOff - 20;
-    const loc64Buf = await file.slice(loc64Off, loc64Off + 20).arrayBuffer();
+  if (eocd32CDOff === 0xFFFFFFFF || eocd32Entries === 0xFFFF || eocd32CDSize === 0xFFFFFFFF) {
+    // ZIP64 — locator is exactly 20 bytes before EOCD
+    const loc64AbsOff = fileEocdOff - 20;
+    if (loc64AbsOff < 0) throw new Error('ZIP64 locator position is invalid');
+    const loc64Buf = await file.slice(loc64AbsOff, loc64AbsOff + 20).arrayBuffer();
     const loc64DV  = new DataView(loc64Buf);
+    const loc64Sig = loc64DV.getUint32(0, true);
+    if (loc64Sig !== 0x07064b50) throw new Error('ZIP64 locator signature not found (got 0x' + loc64Sig.toString(16) + ')');
     const eocd64AbsOff = readU64(loc64DV, 8);
-    const eocd64Buf = await file.slice(eocd64AbsOff, eocd64AbsOff + 56).arrayBuffer();
-    const eocd64DV  = new DataView(eocd64Buf);
+    const eocd64Buf    = await file.slice(eocd64AbsOff, eocd64AbsOff + 56).arrayBuffer();
+    const eocd64DV     = new DataView(eocd64Buf);
     if (readU32(eocd64DV, 0) !== EOCD64_SIG) throw new Error('ZIP64 EOCD signature mismatch');
     totalEntries = readU64(eocd64DV, 32);
     cdSize       = readU64(eocd64DV, 40);
     cdOffset     = readU64(eocd64DV, 48);
   } else {
     totalEntries = eocd32Entries;
-    cdSize       = tailDV.getUint32(eocdOff + 12, true);
+    cdSize       = eocd32CDSize;
     cdOffset     = eocd32CDOff;
   }
 
-  // Read the entire Central Directory in one slice
-  setProgress(20, `Parsing Central Directory… (${formatSize(cdSize)})`);
+  if (cdOffset >= file.size) throw new Error(`Central Directory offset (${cdOffset}) exceeds file size (${file.size}). File may be corrupt.`);
+
+  setProgress(20, `Reading Central Directory… ${formatSize(cdSize)}`);
   const cdBuf = await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer();
   const cdDV  = new DataView(cdBuf);
 
   const entries = [];
   let pos = 0;
   let parsed = 0;
+  const estTotal = totalEntries || 1;
 
-  while (pos < cdBuf.byteLength) {
-    if (cdDV.getUint32(pos, true) !== CD_SIG) break;
+  while (pos + 46 <= cdBuf.byteLength) {
+    const sig = cdDV.getUint32(pos, true);
+    if (sig !== CD_SIG) break;
 
     const compMethod  = readU16(cdDV, pos + 10);
     let   compSize    = readU32(cdDV, pos + 20);
     let   uncompSize  = readU32(cdDV, pos + 24);
     let   localOff    = readU32(cdDV, pos + 42);
-    const crc32       = readU32(cdDV, pos + 16);
+    const crc32val    = readU32(cdDV, pos + 16);
     const fnLen       = readU16(cdDV, pos + 28);
     const extraLen    = readU16(cdDV, pos + 30);
     const cmtLen      = readU16(cdDV, pos + 32);
-    const flags       = readU16(cdDV, pos + 8);
+    const extAttribs  = readU32(cdDV, pos + 38);
 
+    if (pos + 46 + fnLen > cdBuf.byteLength) break;
     const fnBytes = new Uint8Array(cdBuf, pos + 46, fnLen);
     const path    = new TextDecoder('utf-8').decode(fnBytes);
 
-    // ZIP64 extra field
+    // ZIP64 extra field resolution
     if (compSize === 0xFFFFFFFF || uncompSize === 0xFFFFFFFF || localOff === 0xFFFFFFFF) {
       let exOff = pos + 46 + fnLen;
       const exEnd = exOff + extraLen;
-      while (exOff + 4 <= exEnd) {
+      while (exOff + 4 <= exEnd && exOff + 4 <= cdBuf.byteLength) {
         const tag = readU16(cdDV, exOff);
         const sz  = readU16(cdDV, exOff + 2);
-        if (tag === 0x0001) {
+        if (tag === 0x0001 && exOff + 4 + sz <= cdBuf.byteLength) {
           let q = exOff + 4;
-          if (uncompSize === 0xFFFFFFFF) { uncompSize = readU64(cdDV, q); q += 8; }
-          if (compSize   === 0xFFFFFFFF) { compSize   = readU64(cdDV, q); q += 8; }
-          if (localOff   === 0xFFFFFFFF) { localOff   = readU64(cdDV, q); }
+          if (uncompSize === 0xFFFFFFFF && q + 8 <= cdBuf.byteLength) { uncompSize = readU64(cdDV, q); q += 8; }
+          if (compSize   === 0xFFFFFFFF && q + 8 <= cdBuf.byteLength) { compSize   = readU64(cdDV, q); q += 8; }
+          if (localOff   === 0xFFFFFFFF && q + 8 <= cdBuf.byteLength) { localOff   = readU64(cdDV, q); }
           break;
         }
         exOff += 4 + sz;
       }
     }
 
-    const isDir = path.endsWith('/') || (flags & 0x10);
-    if (!isDir) {
-      // We need the actual data offset: LFH + name/extra lengths
-      // Read LFH header (30 bytes) to get variable lengths
-      const lfhBuf  = await file.slice(localOff, localOff + 30).arrayBuffer();
-      const lfhDV   = new DataView(lfhBuf);
-      const lfnLen  = readU16(lfhDV, 26);
-      const lexLen  = readU16(lfhDV, 28);
-      const dataOff = localOff + 30 + lfnLen + lexLen;
-
-      entries.push(new ZipEntry(path, compMethod, compSize, uncompSize, dataOff, crc32));
+    const isDir = path.endsWith('/') || (extAttribs & 0x10);
+    if (!isDir && fnLen > 0) {
+      // Read LFH to get actual data offset (variable name/extra lengths)
+      try {
+        const lfhBuf = await file.slice(localOff, localOff + 30).arrayBuffer();
+        const lfhDV  = new DataView(lfhBuf);
+        const lfhSig = lfhDV.getUint32(0, true);
+        if (lfhSig === LFH_SIG) {
+          const lfnLen  = readU16(lfhDV, 26);
+          const lexLen  = readU16(lfhDV, 28);
+          const dataOff = localOff + 30 + lfnLen + lexLen;
+          entries.push(new ZipEntry(path, compMethod, compSize, uncompSize, dataOff, crc32val));
+        }
+        // silently skip entries with bad LFH
+      } catch(e) { /* skip */ }
     }
 
     pos += 46 + fnLen + extraLen + cmtLen;
     parsed++;
 
-    if (parsed % 200 === 0) {
-      const pct = 20 + Math.round((parsed / totalEntries) * 70);
-      setProgress(pct, `Indexing ${parsed} / ${totalEntries} entries…`);
-      await new Promise(r => setTimeout(r, 0)); // yield
+    if (parsed % 300 === 0) {
+      const pct = 20 + Math.round((parsed / estTotal) * 75);
+      setProgress(Math.min(pct, 94), `Indexed ${parsed.toLocaleString()} / ${estTotal.toLocaleString()} entries…`);
+      await new Promise(r => setTimeout(r, 0));
     }
   }
 
@@ -1189,7 +1253,7 @@ async function loadOBB(file) {
     return;
   }
 
-  obbFile = file;
+  obbFile = file;  // set early so Diagnose works even if parse fails
   showProgress('Parsing OBB structure…');
 
   try {
@@ -1460,8 +1524,84 @@ function hideProgress() {
   document.getElementById('progress-modal').classList.remove('show');
 }
 
-// TOAST
-function showToast(type, msg) {
+// ── Diagnose: show hex dump of first + last 64 bytes to understand file format ──
+async function diagnoseFile() {
+  // Allow diagnosing even without a loaded file by re-using the file input
+  if (!obbFile) {
+    showToast('info', 'Load a file first, then click Diagnose');
+    return;
+  }
+  const file = obbFile;
+  const READ = 256;
+  const headBuf = await file.slice(0, READ).arrayBuffer();
+  const tailBuf = await file.slice(Math.max(0, file.size - READ)).arrayBuffer();
+  const headArr = new Uint8Array(headBuf);
+  const tailArr = new Uint8Array(tailBuf);
+
+  function toHex(arr) {
+    return Array.from(arr).map((b,i) => (i%16===0?'\n'+i.toString(16).padStart(6,'0')+':  ':' ')+b.toString(16).padStart(2,'0')).join('').trim();
+  }
+  function toAscii(arr) {
+    return Array.from(arr).map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('');
+  }
+
+  // Look for EOCD sig in tail
+  const tailDV = new DataView(tailBuf);
+  const eocdSig = 0x06054b50;
+  const loc64Sig = 0x07064b50;
+  const eocd64Sig = 0x06064b50;
+  const cdSig = 0x02014b50;
+  const lfhSig = 0x04034b50;
+
+  const found = [];
+  for (let i = 0; i <= tailArr.length - 4; i++) {
+    const v = tailDV.getUint32(i, true);
+    if (v === eocdSig)   found.push(`EOCD at tail-${READ-i}`);
+    if (v === loc64Sig)  found.push(`ZIP64 Locator at tail-${READ-i}`);
+    if (v === eocd64Sig) found.push(`ZIP64 EOCD at tail-${READ-i}`);
+  }
+  const headDV = new DataView(headBuf);
+  const headSig = headDV.getUint32(0, true);
+  const headInfo = headSig === lfhSig ? 'Starts with LFH (valid ZIP start ✓)' :
+                   headSig === cdSig  ? 'Starts with CD record (unusual)' :
+                   'Does NOT start with ZIP signature ✗ — sig: 0x' + headSig.toString(16);
+
+  const report = [
+    `File: ${file.name}`,
+    `Size: ${formatSize(file.size)} (${file.size} bytes)`,
+    ``,
+    `HEAD signature: ${headInfo}`,
+    `TAIL signatures found: ${found.length ? found.join(', ') : 'NONE — not a valid ZIP tail!'}`,
+    ``,
+    `=== First ${READ} bytes (hex) ===`,
+    toHex(headArr),
+    ``,
+    `=== Last ${READ} bytes (hex) ===`,
+    toHex(tailArr),
+    ``,
+    `=== Last ${READ} bytes (ASCII) ===`,
+    toAscii(tailArr),
+  ].join('\n');
+
+  // Show in a modal
+  document.getElementById('detail-area').innerHTML = `
+    <div class="asset-card" style="max-width:100%">
+      <div class="asset-card-header">
+        <div class="big-file-icon icon-data">🔍</div>
+        <div><h4>File Diagnosis</h4><div class="path">${file.name} — ${formatSize(file.size)}</div></div>
+      </div>
+      <div style="padding:16px 20px">
+        <p style="font-size:11px;color:var(--muted);margin-bottom:10px">Share this output to get help. Copy with the button below.</p>
+        <pre style="font-family:var(--mono);font-size:10px;color:var(--text);background:var(--bg);padding:14px;border-radius:6px;overflow:auto;white-space:pre;max-height:500px;line-height:1.5">${report.replace(/</g,'&lt;')}</pre>
+        <button class="btn btn-ghost" style="margin-top:12px" onclick="navigator.clipboard.writeText(document.querySelector('pre').textContent).then(()=>showToast('success','✓ Copied!'))">📋 Copy Report</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('panel-title').textContent = 'Diagnosis Report';
+  document.getElementById('dl-btn').style.display = 'none';
+  document.getElementById('replace-btn').style.display = 'none';
+}
+
   const icons = { success: '✓', error: '✗', info: 'ℹ' };
   const el = document.createElement('div');
   el.className = `toast ${type}`;
