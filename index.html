@@ -1,1105 +1,559 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>OBB Asset Editor v3.0</title>
+
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--c1:#0f172a;--c2:#1e293b;--c3:#334155;--accent:#6366f1;--accent2:#8b5cf6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--text:#f1f5f9;--muted:#94a3b8;--border:#334155;--card:#1e293b;--radius:12px}
+body{font-family:var(--font-sans,system-ui);background:#0f172a;color:var(--text);min-height:100vh}
 
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+.hero{background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%);padding:2rem 1.5rem 1.5rem;text-align:center;border-bottom:1px solid #1e293b;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,0.15) 0%,transparent 70%)}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;font-size:12px;font-weight:500;padding:4px 12px;border-radius:20px;margin-bottom:1rem}
+.hero h1{font-size:clamp(22px,4vw,32px);font-weight:700;background:linear-gradient(135deg,#e2e8f0,#a5b4fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.5rem}
+.hero p{color:var(--muted);font-size:14px;max-width:480px;margin:0 auto 1.25rem}
+.nav-tabs{display:flex;gap:4px;justify-content:center;flex-wrap:wrap;padding:.75rem 1rem;background:#0d1117;border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:10}
+.tab{padding:7px 14px;border-radius:8px;border:none;background:transparent;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.tab:hover{background:#1e293b;color:var(--text)}
+.tab.active{background:var(--accent);color:#fff}
+.tab i{font-size:15px}
 
-:root{
-  --bg:#0a0c10;
-  --surface:#11141a;
-  --surface2:#181c24;
-  --border:#1e2433;
-  --border2:#252d3d;
-  --accent:#4f8ef7;
-  --accent2:#7c5cfc;
-  --success:#22d47e;
-  --warn:#f7b84f;
-  --danger:#f75a5a;
-  --text:#e2e8f0;
-  --text2:#94a3b8;
-  --text3:#4a5568;
-  --mono:'JetBrains Mono',monospace;
-  --sans:'Inter',sans-serif;
-  --radius:10px;
-  --radius-sm:6px;
-  --shadow:0 4px 24px rgba(0,0,0,.45);
-}
+.section{display:none;padding:1.25rem;max-width:860px;margin:0 auto}
+.section.active{display:block}
 
-body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:1rem}
+.card-header i{font-size:20px;color:var(--accent)}
+.card-header h3{font-size:15px;font-weight:600}
+.card-header p{font-size:12px;color:var(--muted);margin-top:2px}
 
-/* ── HEADER ── */
-header{
-  padding:12px 20px;
-  border-bottom:1px solid var(--border);
-  background:var(--surface);
-  display:flex;align-items:center;gap:12px;
-  flex-shrink:0;z-index:10;
-}
-.logo{
-  width:32px;height:32px;border-radius:8px;flex-shrink:0;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  display:flex;align-items:center;justify-content:center;font-size:16px;
-}
-.header-title{font-family:var(--mono);font-size:14px;font-weight:600;white-space:nowrap}
-.header-title span{font-size:11px;color:var(--text3);margin-left:4px}
-.header-badge{
-  margin-left:auto;background:rgba(79,142,247,.1);color:var(--accent);
-  font-family:var(--mono);font-size:10px;padding:3px 9px;border-radius:20px;
-  border:1px solid rgba(79,142,247,.2);white-space:nowrap;flex-shrink:0;
-}
+.upload-zone{border:2px dashed #334155;border-radius:var(--radius);padding:2rem;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(99,102,241,0.05)}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.upload-zone i{font-size:32px;color:var(--muted);margin-bottom:.5rem}
+.upload-zone p{color:var(--muted);font-size:13px}
+.upload-zone strong{color:var(--accent);font-size:14px;display:block;margin-bottom:.25rem}
 
-/* ── DROP BAR ── */
-.drop-bar{
-  padding:12px 20px;border-bottom:1px solid var(--border);
-  background:var(--surface);display:flex;align-items:center;
-  gap:10px;flex-wrap:wrap;flex-shrink:0;
-}
-#dropzone{
-  flex:1;min-width:180px;border:1.5px dashed var(--border2);border-radius:var(--radius);
-  padding:14px 18px;cursor:pointer;transition:.2s;display:flex;
-  align-items:center;gap:12px;
-}
-#dropzone:hover,#dropzone.dragover{border-color:var(--accent);background:rgba(79,142,247,.04)}
-.drop-icon-sm{font-size:20px;flex-shrink:0}
-.drop-hint{font-size:12px;color:var(--text2)}
-.drop-hint strong{color:var(--accent)}
-.drop-selected{font-family:var(--mono);font-size:12px;color:var(--success);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#file-input{display:none}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#4f46e5}
+.btn-secondary{background:#1e293b;color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:#334155}
+.btn-success{background:var(--green);color:#fff}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:1rem}
 
-.file-info-pill{
-  display:none;align-items:center;gap:8px;
-  background:var(--surface2);border:1px solid var(--border);
-  border-radius:var(--radius);padding:8px 12px;flex-shrink:0;
-}
-.fip-name{font-family:var(--mono);font-size:11px;color:var(--text);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fip-meta{font-size:10px;color:var(--text2)}
-.fip-badge{
-  background:rgba(34,212,126,.12);color:var(--success);
-  font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:20px;
-  border:1px solid rgba(34,212,126,.2);white-space:nowrap;
-}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem}
 
-.btn{
-  font-family:var(--sans);font-size:12px;font-weight:500;
-  padding:8px 14px;border-radius:var(--radius-sm);border:none;
-  cursor:pointer;transition:.15s;white-space:nowrap;display:flex;
-  align-items:center;gap:5px;flex-shrink:0;
-}
-.btn:active{transform:scale(.97)}
-.btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
-.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
-.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--text2)}
-.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
-.btn-ghost.active-mode{border-color:var(--warn);color:var(--warn)}
-.btn-success{background:rgba(34,212,126,.12);color:var(--success);border:1px solid rgba(34,212,126,.25)}
-.btn-danger{background:rgba(247,90,90,.1);color:var(--danger);border:1px solid rgba(247,90,90,.2)}
-.btn-icon{padding:8px;border-radius:var(--radius-sm)}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;margin-top:.75rem}
+input[type=range]{width:100%;accent-color:var(--accent);height:4px}
+input[type=number],select,input[type=text]{background:#0f172a;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;width:100%}
 
-/* ── LAYOUT ── */
-.app-body{
-  flex:1;display:grid;
-  grid-template-columns:280px 1fr;
-  overflow:hidden;
-}
+.canvas-wrap{background:#0d1117;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;min-height:220px;overflow:hidden;position:relative}
+canvas{max-width:100%;max-height:340px;display:block}
 
-/* ── SIDEBAR ── */
-.sidebar{
-  background:var(--surface);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;overflow:hidden;
-}
-.sidebar-head{
-  padding:12px 14px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:8px;flex-shrink:0;
-}
-.sidebar-head h2{font-size:11px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:.08em;flex:1}
-.count-badge{
-  background:var(--border);color:var(--text2);font-family:var(--mono);
-  font-size:10px;padding:2px 7px;border-radius:10px;
-}
-.search-wrap{padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
-.search-wrap input{
-  width:100%;background:var(--bg);border:1px solid var(--border);
-  border-radius:var(--radius-sm);padding:7px 10px 7px 30px;
-  color:var(--text);font-family:var(--mono);font-size:12px;outline:none;
-  transition:.15s;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:9px center;
-}
-.search-wrap input:focus{border-color:var(--accent)}
-.search-wrap input::placeholder{color:var(--text3)}
+.stat-row{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem}
+.stat{background:#0f172a;border:1px solid var(--border);border-radius:8px;padding:.5rem .75rem;font-size:12px;flex:1;min-width:100px}
+.stat .label{color:var(--muted);font-size:11px;margin-bottom:2px}
+.stat .val{font-weight:600;font-size:13px;color:var(--text)}
 
-.filter-row{
-  padding:8px 12px;border-bottom:1px solid var(--border);
-  display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0;
-}
-.filter-btn{
-  font-size:10px;font-family:var(--mono);padding:3px 8px;
-  border-radius:20px;border:1px solid var(--border);
-  background:transparent;color:var(--text2);cursor:pointer;transition:.15s;
-}
-.filter-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(79,142,247,.08)}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.badge-green{background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.2)}
+.badge-amber{background:rgba(245,158,11,0.15);color:#fbbf24;border:1px solid rgba(245,158,11,0.2)}
+.badge-blue{background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.2)}
+.badge-red{background:rgba(239,68,68,0.15);color:#fca5a5;border:1px solid rgba(239,68,68,0.2)}
 
-#file-list{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.progress{background:#1e293b;border-radius:4px;height:6px;overflow:hidden;margin-top:.5rem}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .3s}
 
-.file-item{
-  display:flex;align-items:center;padding:9px 12px;gap:9px;
-  border-bottom:1px solid rgba(30,36,51,.6);cursor:pointer;transition:.1s;
-  position:relative;
-}
-.file-item:hover{background:rgba(79,142,247,.05)}
-.file-item.selected{background:rgba(79,142,247,.1)}
-.file-item.modified{border-left:2px solid var(--warn);padding-left:10px}
-.file-icon{
-  width:28px;height:28px;border-radius:5px;display:flex;align-items:center;
-  justify-content:center;font-size:13px;flex-shrink:0;
-}
-.icon-3d{background:rgba(124,92,252,.15);color:var(--accent2)}
-.icon-data{background:rgba(247,184,79,.12);color:var(--warn)}
-.icon-img{background:rgba(34,212,126,.12);color:var(--success)}
-.icon-audio{background:rgba(247,90,90,.1);color:var(--danger)}
-.icon-other{background:rgba(100,116,139,.1);color:var(--text2)}
-.file-item-info{flex:1;min-width:0}
-.file-item-name{font-family:var(--mono);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
-.file-item-meta{font-size:10px;color:var(--text2);margin-top:1px}
-.mod-dot{width:5px;height:5px;border-radius:50%;background:var(--warn);flex-shrink:0}
+.info-table{width:100%;border-collapse:collapse;font-size:13px}
+.info-table td{padding:6px 0;border-bottom:1px solid #1e293b;vertical-align:top}
+.info-table td:first-child{color:var(--muted);width:45%;padding-right:12px}
+.info-table td:last-child{color:var(--text);word-break:break-all}
 
-/* ── MAIN PANEL ── */
-.main-panel{display:flex;flex-direction:column;overflow:hidden}
-.toolbar{
-  padding:10px 18px;border-bottom:1px solid var(--border);
-  background:var(--surface);display:flex;align-items:center;gap:8px;
-  flex-wrap:wrap;flex-shrink:0;
-}
-.toolbar-title{font-family:var(--mono);font-size:12px;color:var(--text);flex:1;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.detail-area{flex:1;overflow-y:auto;padding:20px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.audio-vis{background:#0d1117;border:1px solid var(--border);border-radius:8px;height:60px;display:flex;align-items:center;justify-content:center;gap:2px;overflow:hidden;padding:0 8px}
+.bar{width:3px;border-radius:2px;background:var(--accent);transition:height .1s;min-height:4px}
 
-.empty-state{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:100%;gap:10px;color:var(--text2);text-align:center;
-}
-.empty-icon{font-size:44px;opacity:.25;margin-bottom:4px}
+.perms{display:flex;flex-wrap:wrap;gap:6px;margin-top:.5rem}
+.perm{background:#0f172a;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;color:var(--muted)}
 
-/* ── ASSET CARD ── */
-.asset-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;max-width:640px}
-.card-head{
-  padding:16px 18px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:12px;
-}
-.card-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
-.card-head h4{font-family:var(--mono);font-size:13px;font-weight:600;line-break:anywhere}
-.card-head .card-path{font-size:10px;color:var(--text2);margin-top:2px;word-break:break-all}
-.card-badge{margin-left:auto;flex-shrink:0;
-  background:rgba(247,184,79,.12);color:var(--warn);font-size:10px;
-  font-family:var(--mono);padding:2px 8px;border-radius:20px;
-  border:1px solid rgba(247,184,79,.25)}
+.notice{background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:.75rem 1rem;font-size:12px;color:#a5b4fc;display:flex;gap:8px;align-items:flex-start;margin-bottom:1rem}
+.notice i{font-size:16px;flex-shrink:0;margin-top:1px}
 
-.meta-grid{padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px;border-bottom:1px solid var(--border)}
-.meta-item label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono);display:block;margin-bottom:2px}
-.meta-item .val{font-family:var(--mono);font-size:12px;color:var(--text)}
-.meta-full{grid-column:1/-1}
+.video-wrap{position:relative;background:#000;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+video{width:100%;display:block;max-height:280px}
+.vid-controls{background:#0d1117;padding:.5rem .75rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.vid-controls input[type=range]{flex:1;min-width:80px}
 
-.action-row{padding:14px 18px;display:flex;gap:8px;flex-wrap:wrap}
+.thumb-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:.5rem}
+.thumb{width:60px;height:45px;border-radius:4px;border:1px solid var(--border);object-fit:cover;cursor:pointer;opacity:.7;transition:opacity .2s}
+.thumb:hover,.thumb.sel{opacity:1;border-color:var(--accent)}
 
-/* ── MODALS ── */
-.overlay{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
-  z-index:200;align-items:center;justify-content:center;padding:16px;
-}
-.overlay.show{display:flex}
-.modal{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);width:100%;max-width:460px;overflow:hidden;
-  box-shadow:var(--shadow);
-}
-.modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.modal-head h3{font-size:14px;font-weight:600;flex:1}
-.modal-body{padding:18px}
-.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.tag{background:#0f172a;border:1px solid var(--border);padding:2px 7px;border-radius:4px;font-size:11px;color:var(--muted)}
 
-.replace-drop{
-  border:1.5px dashed var(--border2);border-radius:var(--radius-sm);
-  padding:24px;text-align:center;cursor:pointer;transition:.15s;margin-bottom:12px;
-}
-.replace-drop:hover{border-color:var(--accent)}
-.replace-drop p{font-size:12px;color:var(--text2);margin-top:4px}
-.replace-drop strong{color:var(--accent)}
-#replace-chosen{font-family:var(--mono);font-size:11px;color:var(--success);margin-top:6px;display:none}
-
-/* ── PROGRESS MODAL ── */
-.prog-modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  width:100%;max-width:380px;padding:24px;box-shadow:var(--shadow)}
-.prog-title{font-size:14px;font-weight:600;margin-bottom:16px}
-.prog-label{font-family:var(--mono);font-size:11px;color:var(--text2);margin-bottom:8px}
-.prog-bar{height:4px;background:var(--border);border-radius:4px;overflow:hidden}
-.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:4px;transition:width .15s;width:0%}
-.prog-sub{font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono);min-height:16px}
-
-/* ── TOASTS ── */
-.toast-wrap{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:500;pointer-events:none}
-.toast{
-  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
-  padding:10px 14px;font-size:12px;display:flex;align-items:center;gap:8px;
-  box-shadow:var(--shadow);animation:toastIn .2s ease;max-width:300px;
-}
-.toast.success{border-color:rgba(34,212,126,.35)}
-.toast.error{border-color:rgba(247,90,90,.35)}
-.toast.info{border-color:rgba(79,142,247,.35)}
-@keyframes toastIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
-
-/* ── DIAG PRE ── */
-.diag-pre{
-  font-family:var(--mono);font-size:10px;color:var(--text);
-  background:var(--bg);padding:14px;border-radius:var(--radius-sm);
-  overflow:auto;white-space:pre;max-height:420px;line-height:1.6;
-  border:1px solid var(--border);
-}
-
-/* ── SCROLLBARS ── */
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-
-/* ── MOBILE BOTTOM SHEET SIDEBAR ── */
-.sidebar-toggle{
-  display:none;position:fixed;bottom:16px;left:16px;z-index:100;
-  width:44px;height:44px;border-radius:50%;padding:0;justify-content:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  color:#fff;border:none;font-size:20px;box-shadow:var(--shadow);
-}
-.sidebar-overlay{
-  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;
-}
-
-/* ── RESPONSIVE ── */
-@media(max-width:768px){
-  body{overflow:auto}
-  .app-body{grid-template-columns:1fr;overflow:visible}
-
-  .header-title span{display:none}
-  .header-badge{display:none}
-
-  .drop-bar{gap:8px}
-  #dropzone{min-width:0}
-  .drop-hint{display:none}
-  .drop-selected{max-width:120px}
-
-  .file-info-pill{display:none!important}
-  .btn span.btn-label{display:none}
-
-  .sidebar{
-    position:fixed;left:0;bottom:0;width:100%;max-height:70vh;
-    z-index:95;border-right:none;border-top:1px solid var(--border);
-    transform:translateY(100%);transition:transform .25s ease;border-radius:16px 16px 0 0;
-  }
-  .sidebar.open{transform:translateY(0)}
-  .sidebar-overlay.show{display:block}
-  .sidebar-toggle{display:flex}
-
-  .main-panel{min-height:calc(100vh - 120px)}
-  .detail-area{padding:12px}
-
-  .asset-card{max-width:100%}
-  .meta-grid{grid-template-columns:1fr 1fr}
-
-  .action-row{gap:6px}
-  .action-row .btn{font-size:11px;padding:7px 10px}
-
-  .toolbar{padding:8px 12px}
-  .toolbar .btn{padding:6px 10px;font-size:11px}
-}
-
-@media(min-width:769px) and (max-width:1100px){
-  .app-body{grid-template-columns:240px 1fr}
-}
-
-@media(min-width:1400px){
-  .app-body{grid-template-columns:320px 1fr}
-}
+#apkFile,#imgFile,#audFile,#vidFile{display:none}
 </style>
-</head>
-<body>
 
-<header>
-  <div class="logo">📦</div>
-  <div class="header-title">OBB Asset Editor <span>v3.0</span></div>
-  <div class="header-badge">Local · No Upload · 3 GB</div>
-</header>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
-<!-- DROP BAR -->
-<div class="drop-bar">
-  <div id="dropzone">
-    <span class="drop-icon-sm">📂</span>
-    <div class="drop-hint">Drop <strong>.obb</strong> here or <strong>tap to browse</strong></div>
-    <div class="drop-selected" id="drop-selected" style="display:none"></div>
-  </div>
-  <input type="file" id="file-input" accept=".obb,.zip">
-
-  <div class="file-info-pill" id="file-info-pill">
-    <div>
-      <div class="fip-name" id="fip-name">—</div>
-      <div class="fip-meta" id="fip-meta">—</div>
-    </div>
-    <span class="fip-badge" id="fip-count">0 files</span>
-  </div>
-
-  <button class="btn btn-primary" id="export-btn" disabled onclick="exportOBB()">
-    ⬇ <span class="btn-label">Export OBB</span>
-  </button>
-  <button class="btn btn-ghost" id="compress-btn" onclick="toggleCompression()" title="Toggle compression">
-    ⚡ <span class="btn-label">STORE</span>
-  </button>
-  <button class="btn btn-ghost" id="diag-btn" onclick="diagnoseFile()" title="Diagnose format">🔍</button>
-  <button class="btn btn-ghost" id="reset-btn" disabled onclick="resetAll()" title="Reset">✕</button>
+<div class="hero">
+  <div class="hero-badge"><i class="ti ti-device-gamepad-2"></i> APK Game Toolkit</div>
+  <h1>Mod, Edit &amp; Enhance Your Game</h1>
+  <p>Inspect APK metadata, edit images, audio and video assets — all in your browser</p>
 </div>
 
-<!-- APP BODY -->
-<div class="app-body">
+<div class="nav-tabs">
+  <button class="tab active" onclick="switchTab('apk')"><i class="ti ti-package"></i> APK Inspector</button>
+  <button class="tab" onclick="switchTab('img')"><i class="ti ti-photo"></i> Image Editor</button>
+  <button class="tab" onclick="switchTab('aud')"><i class="ti ti-music"></i> Audio Editor</button>
+  <button class="tab" onclick="switchTab('vid')"><i class="ti ti-video"></i> Video Editor</button>
+  <button class="tab" onclick="switchTab('gfx')"><i class="ti ti-wand"></i> GFX Tips</button>
+</div>
 
-  <!-- SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-head">
-      <h2>Contents</h2>
-      <span class="count-badge" id="visible-count">0</span>
+<!-- APK Inspector -->
+<div class="section active" id="tab-apk">
+  <div class="notice"><i class="ti ti-info-circle"></i><span>APK inspection reads the package manifest client-side. Full decompilation (graphics/gameplay modding) requires a desktop tool like apktool or MT Manager.</span></div>
+  <div class="card">
+    <div class="card-header"><i class="ti ti-package"></i><div><h3>Upload APK</h3><p>Reads AndroidManifest.xml metadata instantly</p></div></div>
+    <div class="upload-zone" id="apkZone">
+      <input type="file" id="apkFile" accept=".apk,.xapk,.apks">
+      <i class="ti ti-package-import"></i>
+      <strong>Drop your APK here</strong>
+      <p>or click to browse — .apk, .xapk, .apks</p>
     </div>
-    <div class="search-wrap">
-      <input type="text" id="search-input" placeholder="Search files…" oninput="filterFiles()">
-    </div>
-    <div class="filter-row" id="filter-row">
-      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-    </div>
-    <div id="file-list"></div>
   </div>
-
-  <!-- MAIN PANEL -->
-  <div class="main-panel">
-    <div class="toolbar" id="toolbar" style="display:none">
-      <div class="toolbar-title" id="toolbar-title">—</div>
-      <button class="btn btn-ghost" id="dl-btn" onclick="downloadSelected()">⬇ <span class="btn-label">Download</span></button>
-      <button class="btn btn-primary" id="rep-btn" onclick="openReplaceModal()">↺ <span class="btn-label">Replace</span></button>
-    </div>
-    <div class="detail-area" id="detail-area">
-      <div class="empty-state">
-        <div class="empty-icon">🗂️</div>
-        <p style="font-size:13px;font-weight:500">Load an OBB file to get started</p>
-        <p style="font-size:12px;color:var(--text3)">All processing is 100% local — nothing is uploaded</p>
+  <div class="card" id="apkResult" style="display:none">
+    <div class="card-header"><i class="ti ti-file-info"></i><div><h3 id="apkName">Package Info</h3><p id="apkSize">—</p></div></div>
+    <div class="grid2">
+      <div>
+        <table class="info-table" id="apkTable"></table>
+      </div>
+      <div>
+        <div class="stat-row">
+          <div class="stat"><div class="label">File Size</div><div class="val" id="apkSizeStat">—</div></div>
+          <div class="stat"><div class="label">Entries</div><div class="val" id="apkEntryStat">—</div></div>
+        </div>
+        <label style="margin-top:1rem">Permissions detected</label>
+        <div class="perms" id="apkPerms"></div>
+        <label style="margin-top:1rem">Asset folders</label>
+        <div class="perms" id="apkFolders"></div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Mobile sidebar toggle -->
-<button class="sidebar-toggle btn" id="sidebar-toggle" onclick="toggleSidebar()">☰</button>
-<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
-
-<!-- REPLACE MODAL -->
-<div class="overlay" id="replace-modal">
-  <div class="modal">
-    <div class="modal-head">
-      <span>↺</span>
-      <h3>Replace Asset</h3>
-      <button class="btn btn-ghost btn-icon" onclick="closeReplaceModal()">✕</button>
+<!-- Image Editor -->
+<div class="section" id="tab-img">
+  <div class="card">
+    <div class="card-header"><i class="ti ti-photo-up"></i><div><h3>Load Image</h3><p>PNG, JPG, WebP, GIF</p></div></div>
+    <div class="upload-zone" id="imgZone">
+      <input type="file" id="imgFile" accept="image/*">
+      <i class="ti ti-photo"></i>
+      <strong>Drop image here</strong>
+      <p>PNG, JPG, WebP, BMP, GIF</p>
     </div>
-    <div class="modal-body">
-      <p style="font-size:11px;color:var(--text2);margin-bottom:12px">
-        Replacing: <span id="replace-target" style="color:var(--text);font-family:var(--mono)"></span>
-      </p>
-      <div class="replace-drop" onclick="document.getElementById('replace-input').click()">
-        <input type="file" id="replace-input" style="display:none" onchange="onReplaceChosen(this)">
-        <div style="font-size:22px">📁</div>
-        <p>Tap to choose replacement file</p>
-        <p><strong>Any file type accepted</strong></p>
+  </div>
+  <div id="imgEditor" style="display:none">
+    <div class="card">
+      <div class="canvas-wrap"><canvas id="imgCanvas"></canvas></div>
+      <div class="stat-row" style="margin-top:.75rem">
+        <div class="stat"><div class="label">Width</div><div class="val" id="iW">—</div></div>
+        <div class="stat"><div class="label">Height</div><div class="val" id="iH">—</div></div>
+        <div class="stat"><div class="label">Format</div><div class="val" id="iFmt">—</div></div>
+        <div class="stat"><div class="label">Size</div><div class="val" id="iSz">—</div></div>
       </div>
-      <div id="replace-chosen"></div>
     </div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" onclick="closeReplaceModal()">Cancel</button>
-      <button class="btn btn-primary" id="confirm-rep-btn" disabled onclick="confirmReplace()">Confirm Replace</button>
+    <div class="card">
+      <div class="card-header"><i class="ti ti-adjustments"></i><div><h3>Adjustments</h3></div></div>
+      <div class="grid2">
+        <div>
+          <label>Brightness <span id="brVal">0</span></label>
+          <input type="range" id="brSlider" min="-100" max="100" value="0" oninput="applyFilters()">
+          <label>Contrast <span id="ctVal">0</span></label>
+          <input type="range" id="ctSlider" min="-100" max="100" value="0" oninput="applyFilters()">
+          <label>Saturation <span id="satVal">100</span>%</label>
+          <input type="range" id="satSlider" min="0" max="200" value="100" oninput="applyFilters()">
+        </div>
+        <div>
+          <label>Hue Rotate <span id="hueVal">0</span>°</label>
+          <input type="range" id="hueSlider" min="0" max="360" value="0" oninput="applyFilters()">
+          <label>Blur <span id="blurVal">0</span>px</label>
+          <input type="range" id="blurSlider" min="0" max="20" value="0" oninput="applyFilters()">
+          <label>Sharpness</label>
+          <input type="range" id="sharpSlider" min="0" max="5" value="0" step="0.5" oninput="applyFilters()">
+        </div>
+      </div>
+      <label style="margin-top:1rem">Filter Preset</label>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('none')">Original</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('warm')">Warm</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('cool')">Cool</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('grayscale')">Grayscale</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('sepia')">Sepia</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('vivid')">Vivid</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyPreset('night')">Night Mode</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><i class="ti ti-crop"></i><div><h3>Transform</h3></div></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="rotateImg(90)"><i class="ti ti-rotate-clockwise"></i> Rotate 90°</button>
+        <button class="btn btn-secondary btn-sm" onclick="rotateImg(-90)"><i class="ti ti-rotate-2"></i> Rotate -90°</button>
+        <button class="btn btn-secondary btn-sm" onclick="flipImg('h')"><i class="ti ti-flip-horizontal"></i> Flip H</button>
+        <button class="btn btn-secondary btn-sm" onclick="flipImg('v')"><i class="ti ti-flip-vertical"></i> Flip V</button>
+        <button class="btn btn-secondary btn-sm" onclick="resetImg()"><i class="ti ti-refresh"></i> Reset</button>
+      </div>
+      <div class="grid2" style="margin-top:1rem">
+        <div>
+          <label>Resize Width (px)</label>
+          <input type="number" id="resW" placeholder="e.g. 512">
+        </div>
+        <div>
+          <label>Resize Height (px)</label>
+          <input type="number" id="resH" placeholder="e.g. 512">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="resizeImg()"><i class="ti ti-resize"></i> Apply Resize</button>
+        <select id="exportFmt" style="width:auto">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPEG</option>
+          <option value="webp">WebP</option>
+        </select>
+        <input type="number" id="exportQ" value="92" min="1" max="100" style="width:70px" placeholder="Quality">
+        <button class="btn btn-success" onclick="downloadImg()"><i class="ti ti-download"></i> Download</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- PROGRESS MODAL -->
-<div class="overlay" id="prog-overlay">
-  <div class="prog-modal">
-    <div class="prog-title" id="prog-title">Processing…</div>
-    <div class="prog-label" id="prog-label">Please wait…</div>
-    <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
-    <div class="prog-sub" id="prog-sub"></div>
+<!-- Audio Editor -->
+<div class="section" id="tab-aud">
+  <div class="card">
+    <div class="card-header"><i class="ti ti-music-up"></i><div><h3>Load Audio</h3><p>MP3, WAV, OGG, M4A, FLAC</p></div></div>
+    <div class="upload-zone" id="audZone">
+      <input type="file" id="audFile" accept="audio/*">
+      <i class="ti ti-music"></i>
+      <strong>Drop audio file here</strong>
+      <p>MP3, WAV, OGG, M4A, FLAC</p>
+    </div>
+  </div>
+  <div id="audEditor" style="display:none">
+    <div class="card">
+      <div class="card-header"><i class="ti ti-wave-sine"></i><div><h3 id="audName">Audio</h3><p id="audInfo">—</p></div></div>
+      <div class="audio-vis" id="audVis"></div>
+      <div style="margin-top:.75rem">
+        <audio id="audPlayer" controls style="width:100%;border-radius:8px"></audio>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="label">Duration</div><div class="val" id="audDur">—</div></div>
+        <div class="stat"><div class="label">File Size</div><div class="val" id="audSize">—</div></div>
+        <div class="stat"><div class="label">Format</div><div class="val" id="audFmt">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><i class="ti ti-adjustments-horizontal"></i><div><h3>Audio Controls</h3></div></div>
+      <label>Volume <span id="volVal">100</span>%</label>
+      <input type="range" id="volSlider" min="0" max="200" value="100" oninput="setAudVol()">
+      <label>Playback Speed <span id="spdVal">1.0</span>x</label>
+      <input type="range" id="spdSlider" min="0.25" max="3" value="1" step="0.25" oninput="setAudSpd()">
+      <label>Trim Start (sec) <span id="trimSVal">0</span>s</label>
+      <input type="range" id="trimS" min="0" max="100" value="0" step="0.1" oninput="updateTrim()">
+      <label>Trim End (sec) <span id="trimEVal">—</span>s</label>
+      <input type="range" id="trimE" min="0" max="100" value="100" step="0.1" oninput="updateTrim()">
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="previewTrim()"><i class="ti ti-player-play"></i> Preview Trim</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('audPlayer').playbackRate=1;document.getElementById('audPlayer').currentTime=0"><i class="ti ti-refresh"></i> Reset</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><i class="ti ti-sparkles"></i><div><h3>Effects</h3></div></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="toggleEffect('reverb')"><i class="ti ti-ripple"></i> Reverb</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleEffect('bass')"><i class="ti ti-wave-square"></i> Bass Boost</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleEffect('8bit')"><i class="ti ti-device-gamepad"></i> 8-bit</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleEffect('radio')"><i class="ti ti-broadcast"></i> Radio</button>
+      </div>
+      <div class="notice" style="margin-top:1rem;margin-bottom:0"><i class="ti ti-info-circle"></i><span>Effects preview in real-time via Web Audio API. Click Download below to save the audio with your settings (trim + volume).</span></div>
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="downloadAud()"><i class="ti ti-download"></i> Download Audio</button>
+      </div>
+    </div>
   </div>
 </div>
 
-<div class="toast-wrap" id="toast-wrap"></div>
+<!-- Video Editor -->
+<div class="section" id="tab-vid">
+  <div class="card">
+    <div class="card-header"><i class="ti ti-video-plus"></i><div><h3>Load Video</h3><p>MP4, WebM, OGG</p></div></div>
+    <div class="upload-zone" id="vidZone">
+      <input type="file" id="vidFile" accept="video/*">
+      <i class="ti ti-video"></i>
+      <strong>Drop video file here</strong>
+      <p>MP4, WebM, MOV, OGG</p>
+    </div>
+  </div>
+  <div id="vidEditor" style="display:none">
+    <div class="card">
+      <div class="video-wrap">
+        <video id="vidPlayer" preload="metadata"></video>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><div class="label">Duration</div><div class="val" id="vDur">—</div></div>
+        <div class="stat"><div class="label">Resolution</div><div class="val" id="vRes">—</div></div>
+        <div class="stat"><div class="label">File Size</div><div class="val" id="vSz">—</div></div>
+        <div class="stat"><div class="label">Format</div><div class="val" id="vFmt">—</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><i class="ti ti-adjustments"></i><div><h3>Video Filters (Live Preview)</h3></div></div>
+      <div class="grid2">
+        <div>
+          <label>Brightness <span id="vBrVal">100</span>%</label>
+          <input type="range" id="vBr" min="0" max="300" value="100" oninput="applyVidFilter()">
+          <label>Contrast <span id="vCtVal">100</span>%</label>
+          <input type="range" id="vCt" min="0" max="300" value="100" oninput="applyVidFilter()">
+          <label>Saturation <span id="vSatVal">100</span>%</label>
+          <input type="range" id="vSat" min="0" max="300" value="100" oninput="applyVidFilter()">
+        </div>
+        <div>
+          <label>Hue Rotate <span id="vHueVal">0</span>°</label>
+          <input type="range" id="vHue" min="0" max="360" value="0" oninput="applyVidFilter()">
+          <label>Blur <span id="vBlurVal">0</span>px</label>
+          <input type="range" id="vBlur" min="0" max="20" value="0" oninput="applyVidFilter()">
+          <label>Opacity <span id="vOpVal">100</span>%</label>
+          <input type="range" id="vOp" min="0" max="100" value="100" oninput="applyVidFilter()">
+        </div>
+      </div>
+      <label style="margin-top:1rem">Preset</label>
+      <div class="btn-row">
+        <button class="btn btn-secondary btn-sm" onclick="applyVidPreset('none')">Original</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyVidPreset('vivid')">Vivid</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyVidPreset('bw')">B&amp;W</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyVidPreset('warm')">Warm</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyVidPreset('cool')">Cool</button>
+        <button class="btn btn-secondary btn-sm" onclick="applyVidPreset('night')">Night</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><i class="ti ti-scissors"></i><div><h3>Trim &amp; Speed</h3></div></div>
+      <label>Playback Speed <span id="vSpdVal">1.0</span>x</label>
+      <input type="range" id="vSpd" min="0.25" max="4" value="1" step="0.25" oninput="setVidSpd()">
+      <label>Volume <span id="vVolVal">100</span>%</label>
+      <input type="range" id="vVol" min="0" max="200" value="100" oninput="setVidVol()">
+      <div class="btn-row" style="margin-top:.75rem">
+        <button class="btn btn-primary" onclick="captureFrame()"><i class="ti ti-camera"></i> Capture Frame</button>
+        <button class="btn btn-secondary" onclick="resetVid()"><i class="ti ti-refresh"></i> Reset Filters</button>
+      </div>
+      <div id="capturedFrames" class="thumb-row"></div>
+    </div>
+  </div>
+</div>
+
+<!-- GFX Tips -->
+<div class="section" id="tab-gfx">
+  <div class="notice"><i class="ti ti-bulb"></i><span>These are proven techniques used by game modders to enhance graphics and gameplay. Desktop tools are required for actual APK patching.</span></div>
+  <div class="card">
+    <div class="card-header"><i class="ti ti-device-desktop"></i><div><h3>Recommended Desktop Tools</h3><p>For actual APK modification</p></div></div>
+    <div class="grid2">
+      <div style="background:#0f172a;border-radius:8px;border:1px solid var(--border);padding:1rem">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:.5rem"><span class="badge badge-green">Android</span><strong style="font-size:13px">MT Manager</strong></div>
+        <p style="font-size:12px;color:var(--muted)">All-in-one APK editor, resource replacer, DEX patcher. Best for mobile modding.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;border:1px solid var(--border);padding:1rem">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:.5rem"><span class="badge badge-blue">PC</span><strong style="font-size:13px">apktool</strong></div>
+        <p style="font-size:12px;color:var(--muted)">Decompile/recompile APKs, edit smali, replace textures and manifests.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;border:1px solid var(--border);padding:1rem">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:.5rem"><span class="badge badge-amber">PC</span><strong style="font-size:13px">GameGuardian</strong></div>
+        <p style="font-size:12px;color:var(--muted)">Memory editor and speed hack for running games — gameplay tuning.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;border:1px solid var(--border);padding:1rem">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:.5rem"><span class="badge badge-blue">PC</span><strong style="font-size:13px">JADX / dex2jar</strong></div>
+        <p style="font-size:12px;color:var(--muted)">Decompile DEX bytecode to Java for reading and editing game logic.</p>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><i class="ti ti-photo-star"></i><div><h3>Graphics Enhancement Tips</h3></div></div>
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <div style="background:#0f172a;border-radius:8px;padding:.75rem 1rem;border-left:3px solid var(--accent)">
+        <strong style="font-size:13px;color:var(--text)">Upscale Textures</strong>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Replace low-res PNG/WebP textures in res/ or assets/ with 2x or 4x upscaled versions. Use waifu2x or Real-ESRGAN for lossless AI upscaling.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;padding:.75rem 1rem;border-left:3px solid var(--accent2)">
+        <strong style="font-size:13px;color:var(--text)">Replace Shaders</strong>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Unity/Unreal shader files (.shader, .glsl) can be extracted and enhanced. Add bloom, tone mapping, or shadow quality improvements.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;padding:.75rem 1rem;border-left:3px solid var(--green)">
+        <strong style="font-size:13px;color:var(--text)">Increase Draw Distance</strong>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Edit game config XML or JSON files in assets/ to raise LOD bias, shadow distance, and render resolution multiplier.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;padding:.75rem 1rem;border-left:3px solid var(--amber)">
+        <strong style="font-size:13px;color:var(--text)">60/90/120 FPS Patch</strong>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Some games cap FPS in the manifest or a config file. Edit targetFrameRate values in smali or Unity's boot.config to unlock higher frame rates.</p>
+      </div>
+      <div style="background:#0f172a;border-radius:8px;padding:.75rem 1rem;border-left:3px solid var(--red)">
+        <strong style="font-size:13px;color:var(--text)">Audio Quality Upgrade</strong>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Game audio is usually compressed OGG/MP3. Replace with high-bitrate versions. Keep the same filename and format so the game loads them automatically.</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
-// ════════════════════════════════════════════════════════
-// STATE
-// ════════════════════════════════════════════════════════
-let obbFile         = null;
-let allFiles        = [];
-let filteredFiles   = [];
-let selectedPath    = null;
-let modifications   = {};
-let pendingReplace  = null;
-let activeFilter    = 'all';
-let useCompression  = false;
-
-// ════════════════════════════════════════════════════════
-// UTILITIES
-// ════════════════════════════════════════════════════════
-function readU16(dv,o){return dv.getUint16(o,true)}
-function readU32(dv,o){return dv.getUint32(o,true)}
-function readU64(dv,o){
-  var lo=dv.getUint32(o,true),hi=dv.getUint32(o+4,true);
-  return hi*0x100000000+lo;
-}
-function setU64(dv,o,v){
-  dv.setUint32(o,v>>>0,true);
-  dv.setUint32(o+4,Math.floor(v/0x100000000)>>>0,true);
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach((b,i)=>{b.classList.remove('active')});
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  event.currentTarget.classList.add('active');
 }
 
-function formatSize(b){
-  if(!b||b<0)return '0 B';
-  if(b<1024)return b+' B';
-  if(b<1048576)return (b/1024).toFixed(1)+' KB';
-  if(b<1073741824)return (b/1048576).toFixed(2)+' MB';
-  return (b/1073741824).toFixed(3)+' GB';
+// APK Inspector
+let JSZip;
+async function loadZip(){
+  if(JSZip)return JSZip;
+  await new Promise(r=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';s.onload=r;document.head.appendChild(s)});
+  JSZip=window.JSZip;return JSZip;
 }
-
-const CRC_TBL=(function(){
-  var t=new Uint32Array(256);
-  for(var i=0;i<256;i++){var c=i;for(var j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[i]=c;}
-  return t;
-})();
-function crc32(data){
-  var c=0xFFFFFFFF;
-  for(var i=0;i<data.length;i++)c=CRC_TBL[(c^data[i])&0xFF]^(c>>>8);
-  return(c^0xFFFFFFFF)>>>0;
-}
-
-// ════════════════════════════════════════════════════════
-// ZIP ENTRY CLASS
-// ════════════════════════════════════════════════════════
-function ZipEntry(path,method,compSize,uncompSize,dataOffset,crc){
-  this.path=path;
-  this.compMethod=method;
-  this.compSize=compSize;
-  this.size=uncompSize;
-  this.dataOffset=dataOffset;
-  this.crc=crc;
-}
-ZipEntry.prototype.readCompressed=async function(){
-  var sl=obbFile.slice(this.dataOffset,this.dataOffset+this.compSize);
-  return new Uint8Array(await sl.arrayBuffer());
-};
-ZipEntry.prototype.decompress=async function(){
-  var comp=await this.readCompressed();
-  if(this.compMethod===0)return comp;
-  var ds=new DecompressionStream('deflate-raw');
-  var w=ds.writable.getWriter();
-  w.write(comp);w.close();
-  var chunks=[],reader=ds.readable.getReader();
-  while(true){var r=await reader.read();if(r.done)break;chunks.push(r.value);}
-  var total=chunks.reduce(function(s,c){return s+c.length;},0);
-  var out=new Uint8Array(total),pos=0;
-  chunks.forEach(function(c){out.set(c,pos);pos+=c.length;});
-  return out;
-};
-ZipEntry.prototype.toBlob=async function(mime){
-  var d=await this.decompress();
-  return new Blob([d],{type:mime||'application/octet-stream'});
-};
-
-// ════════════════════════════════════════════════════════
-// ZIP PARSER — reads only Central Directory (never full file)
-// ════════════════════════════════════════════════════════
-var SIG_EOCD   =0x06054b50;
-var SIG_EOCD64 =0x06064b50;
-var SIG_LOC64  =0x07064b50;
-var SIG_CD     =0x02014b50;
-var SIG_LFH    =0x04034b50;
-
-async function findEOCD(file){
-  // Try progressively larger tail reads until EOCD found
-  var sizes=[65558, 1*1024*1024, 8*1024*1024, 32*1024*1024];
-  for(var si=0;si<sizes.length;si++){
-    var scanSize=Math.min(sizes[si],file.size);
-    setProgress(3+si*3,'Scanning last '+formatSize(scanSize)+'…');
-    var buf=await file.slice(file.size-scanSize).arrayBuffer();
-    var dv=new DataView(buf);
-    for(var i=buf.byteLength-22;i>=0;i--){
-      if(dv.getUint32(i,true)===SIG_EOCD){
-        var cmtLen=dv.getUint16(i+20,true);
-        if(i+22+cmtLen<=buf.byteLength){
-          return {buf:buf,dv:dv,eocdOff:i,baseOff:file.size-scanSize};
-        }
-      }
-    }
-  }
-  // Not found — check if it even starts with PK
-  var hd=new Uint8Array(await file.slice(0,8).arrayBuffer());
-  var hdv=new DataView(hd.buffer);
-  var sig=hdv.getUint32(0,true);
-  if(sig===SIG_LFH){
-    throw new Error('Valid ZIP start (PK\\x03\\x04) found but EOCD not in last 32 MB. File may be truncated or corrupt.');
-  }
-  var hex=Array.from(hd).map(function(b){return b.toString(16).padStart(2,'0');}).join(' ');
-  throw new Error('Not a ZIP/OBB file. First 8 bytes: '+hex);
-}
-
-async function parseZip(file){
-  var found=await findEOCD(file);
-  var dv=found.dv,eocdOff=found.eocdOff,baseOff=found.baseOff;
-  var fileEocdOff=baseOff+eocdOff;
-
-  var cdOff,cdSize,totalEntries;
-  var e32=readU16(dv,eocdOff+10);
-  var sz32=readU32(dv,eocdOff+12);
-  var off32=readU32(dv,eocdOff+16);
-
-  if(off32===0xFFFFFFFF||e32===0xFFFF||sz32===0xFFFFFFFF){
-    // ZIP64
-    var l64abs=fileEocdOff-20;
-    if(l64abs<0)throw new Error('ZIP64 locator position invalid');
-    var l64buf=await file.slice(l64abs,l64abs+20).arrayBuffer();
-    var l64dv=new DataView(l64buf);
-    if(l64dv.getUint32(0,true)!==SIG_LOC64)
-      throw new Error('ZIP64 locator sig missing (got 0x'+l64dv.getUint32(0,true).toString(16)+')');
-    var e64abs=readU64(l64dv,8);
-    var e64buf=await file.slice(e64abs,e64abs+56).arrayBuffer();
-    var e64dv=new DataView(e64buf);
-    if(readU32(e64dv,0)!==SIG_EOCD64)throw new Error('ZIP64 EOCD sig mismatch');
-    totalEntries=readU64(e64dv,32);
-    cdSize=readU64(e64dv,40);
-    cdOff=readU64(e64dv,48);
-  } else {
-    totalEntries=e32; cdSize=sz32; cdOff=off32;
-  }
-
-  if(cdOff>=file.size)throw new Error('CD offset ('+cdOff+') > file size ('+file.size+'). Corrupt?');
-  setProgress(18,'Reading Central Directory ('+formatSize(cdSize)+')…');
-  var cdbuf=await file.slice(cdOff,cdOff+cdSize).arrayBuffer();
-  var cddv=new DataView(cdbuf);
-
-  var entries=[],pos=0,parsed=0,estTotal=totalEntries||1;
-  while(pos+46<=cdbuf.byteLength){
-    if(cddv.getUint32(pos,true)!==SIG_CD)break;
-    var method=readU16(cddv,pos+10);
-    var compSz=readU32(cddv,pos+20);
-    var uncompSz=readU32(cddv,pos+24);
-    var lOff=readU32(cddv,pos+42);
-    var crc=readU32(cddv,pos+16);
-    var fnLen=readU16(cddv,pos+28);
-    var exLen=readU16(cddv,pos+30);
-    var cmLen=readU16(cddv,pos+32);
-    var extAttr=readU32(cddv,pos+38);
-
-    if(pos+46+fnLen>cdbuf.byteLength)break;
-    var fnBytes=new Uint8Array(cdbuf,pos+46,fnLen);
-    var path=new TextDecoder('utf-8').decode(fnBytes);
-
-    // ZIP64 extra
-    if(compSz===0xFFFFFFFF||uncompSz===0xFFFFFFFF||lOff===0xFFFFFFFF){
-      var exStart=pos+46+fnLen,exEnd=exStart+exLen;
-      var ep=exStart;
-      while(ep+4<=exEnd&&ep+4<=cdbuf.byteLength){
-        var tag=readU16(cddv,ep),tlen=readU16(cddv,ep+2);
-        if(tag===0x0001){
-          var q=ep+4;
-          if(uncompSz===0xFFFFFFFF&&q+8<=cdbuf.byteLength){uncompSz=readU64(cddv,q);q+=8;}
-          if(compSz===0xFFFFFFFF&&q+8<=cdbuf.byteLength){compSz=readU64(cddv,q);q+=8;}
-          if(lOff===0xFFFFFFFF&&q+8<=cdbuf.byteLength){lOff=readU64(cddv,q);}
-          break;
-        }
-        ep+=4+tlen;
-      }
-    }
-
-    var isDir=path.endsWith('/')||(extAttr&0x10);
-    if(!isDir&&fnLen>0){
-      try{
-        var lfhbuf=await file.slice(lOff,lOff+30).arrayBuffer();
-        var lfhdv=new DataView(lfhbuf);
-        if(lfhdv.getUint32(0,true)===SIG_LFH){
-          var lfnL=readU16(lfhdv,26),lexL=readU16(lfhdv,28);
-          entries.push(new ZipEntry(path,method,compSz,uncompSz,lOff+30+lfnL+lexL,crc));
-        }
-      }catch(e){}
-    }
-
-    pos+=46+fnLen+exLen+cmLen;
-    parsed++;
-    if(parsed%500===0){
-      var pct=18+Math.round((parsed/estTotal)*72);
-      setProgress(Math.min(pct,90),'Indexed '+parsed.toLocaleString()+'/'+estTotal.toLocaleString());
-      await new Promise(function(r){setTimeout(r,0);});
-    }
-  }
-  return entries;
-}
-
-// ════════════════════════════════════════════════════════
-// BUILD ZIP (export)
-// ════════════════════════════════════════════════════════
-async function buildZip(entries,mods,compression){
-  var parts=[],cdRecs=[],offset=0,enc=new TextEncoder();
-  var total=entries.length;
-  for(var i=0;i<total;i++){
-    var entry=entries[i],mod=mods[entry.path];
-    if(i%30===0){
-      setProgress(Math.round(i/total*88),'Writing '+i+'/'+total+'…');
-      await new Promise(function(r){setTimeout(r,0);});
-    }
-    var data=mod?new Uint8Array(await mod.file.arrayBuffer()):await entry.decompress();
-    var crc=crc32(data);
-    var compData,method;
-    if(compression==='DEFLATE'){
-      var cs=new CompressionStream('deflate-raw');
-      var cw=cs.writable.getWriter();cw.write(data);cw.close();
-      var chunks=[],cr=cs.readable.getReader();
-      while(true){var rv=await cr.read();if(rv.done)break;chunks.push(rv.value);}
-      var tlen=chunks.reduce(function(s,c){return s+c.length;},0);
-      compData=new Uint8Array(tlen);var cp=0;
-      chunks.forEach(function(c){compData.set(c,cp);cp+=c.length;});
-      method=8;
-    } else {
-      compData=data;method=0;
-    }
-    var pb=enc.encode(entry.path);
-    var use64=offset>0xFFFFFFFE||data.length>0xFFFFFFFE||compData.length>0xFFFFFFFE;
-    var ex64lfh=use64?new Uint8Array(20):new Uint8Array(0);
-    if(use64){var edv=new DataView(ex64lfh.buffer);edv.setUint16(0,0x0001,true);edv.setUint16(2,16,true);setU64(edv,4,data.length);setU64(edv,12,compData.length);}
-    var lfh=new Uint8Array(30+pb.length+ex64lfh.length);
-    var lv=new DataView(lfh.buffer);
-    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,use64?45:20,true);
-    lv.setUint16(6,0,true);lv.setUint16(8,method,true);lv.setUint32(10,0,true);
-    lv.setUint32(14,crc,true);
-    lv.setUint32(18,use64?0xFFFFFFFF:compData.length,true);
-    lv.setUint32(22,use64?0xFFFFFFFF:data.length,true);
-    lv.setUint16(26,pb.length,true);lv.setUint16(28,ex64lfh.length,true);
-    lfh.set(pb,30);lfh.set(ex64lfh,30+pb.length);
-    var ex64cd=use64?new Uint8Array(28):new Uint8Array(0);
-    if(use64){var cdv2=new DataView(ex64cd.buffer);cdv2.setUint16(0,0x0001,true);cdv2.setUint16(2,24,true);setU64(cdv2,4,data.length);setU64(cdv2,12,compData.length);setU64(cdv2,20,offset);}
-    var cd=new Uint8Array(46+pb.length+ex64cd.length);
-    var cv=new DataView(cd.buffer);
-    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,0x0314,true);cv.setUint16(6,use64?45:20,true);
-    cv.setUint16(8,0,true);cv.setUint16(10,method,true);cv.setUint32(12,0,true);
-    cv.setUint32(16,crc,true);cv.setUint32(20,use64?0xFFFFFFFF:compData.length,true);
-    cv.setUint32(24,use64?0xFFFFFFFF:data.length,true);cv.setUint16(28,pb.length,true);
-    cv.setUint16(30,ex64cd.length,true);cv.setUint16(32,0,true);cv.setUint16(34,0,true);
-    cv.setUint16(36,0,true);cv.setUint32(38,0,true);
-    cv.setUint32(42,use64?0xFFFFFFFF:offset,true);
-    cd.set(pb,46);cd.set(ex64cd,46+pb.length);
-    parts.push(lfh,compData);cdRecs.push(cd);
-    offset+=lfh.length+compData.length;
-  }
-  setProgress(92,'Writing central directory…');
-  await new Promise(function(r){setTimeout(r,0);});
-  var cdSize=cdRecs.reduce(function(s,c){return s+c.length;},0);
-  var need64=offset>0xFFFFFFFE||total>0xFFFE||cdSize>0xFFFFFFFE;
-  var cdbuf=new Uint8Array(cdSize),cp2=0;
-  cdRecs.forEach(function(r){cdbuf.set(r,cp2);cp2+=r.length;});
-  var trailer;
-  if(need64){
-    trailer=new Uint8Array(98);var tv=new DataView(trailer.buffer);
-    tv.setUint32(0,0x06064b50,true);setU64(tv,4,44);
-    tv.setUint16(12,0x0314,true);tv.setUint16(14,45,true);
-    tv.setUint32(16,0,true);tv.setUint32(20,0,true);
-    setU64(tv,24,total);setU64(tv,32,total);setU64(tv,40,cdSize);setU64(tv,48,offset);
-    tv.setUint32(56,0x07064b50,true);tv.setUint32(60,0,true);
-    setU64(tv,64,offset+cdSize);tv.setUint32(72,1,true);
-    tv.setUint32(76,0x06054b50,true);tv.setUint16(80,0,true);tv.setUint16(82,0,true);
-    tv.setUint16(84,Math.min(total,0xFFFF),true);tv.setUint16(86,Math.min(total,0xFFFF),true);
-    tv.setUint32(88,Math.min(cdSize,0xFFFFFFFF),true);tv.setUint32(92,Math.min(offset,0xFFFFFFFF),true);
-    tv.setUint16(96,0,true);
-  } else {
-    trailer=new Uint8Array(22);var tv2=new DataView(trailer.buffer);
-    tv2.setUint32(0,0x06054b50,true);tv2.setUint16(4,0,true);tv2.setUint16(6,0,true);
-    tv2.setUint16(8,total,true);tv2.setUint16(10,total,true);
-    tv2.setUint32(12,cdSize,true);tv2.setUint32(16,offset,true);tv2.setUint16(20,0,true);
-  }
-  setProgress(97,'Creating blob…');await new Promise(function(r){setTimeout(r,0);});
-  return new Blob(parts.concat([cdbuf,trailer]),{type:'application/zip'});
-}
-
-// ════════════════════════════════════════════════════════
-// FILE TYPE MAP
-// ════════════════════════════════════════════════════════
-var EXT_MAP={
-  fbx:{icon:'🧊',cls:'icon-3d',label:'3D Model'},obj:{icon:'🧊',cls:'icon-3d',label:'3D Model'},
-  dae:{icon:'🧊',cls:'icon-3d',label:'3D Model'},glb:{icon:'🧊',cls:'icon-3d',label:'3D Model'},
-  gltf:{icon:'🧊',cls:'icon-3d',label:'3D Model'},blend:{icon:'🧊',cls:'icon-3d',label:'3D Model'},
-  asset:{icon:'⚙️',cls:'icon-data',label:'Unity Asset'},unity3d:{icon:'⚙️',cls:'icon-data',label:'Unity Bundle'},
-  bundle:{icon:'⚙️',cls:'icon-data',label:'Asset Bundle'},json:{icon:'📋',cls:'icon-data',label:'JSON'},
-  xml:{icon:'📋',cls:'icon-data',label:'XML'},bin:{icon:'💾',cls:'icon-data',label:'Binary'},
-  dat:{icon:'💾',cls:'icon-data',label:'Data'},bytes:{icon:'💾',cls:'icon-data',label:'Bytes'},
-  png:{icon:'🖼️',cls:'icon-img',label:'Image'},jpg:{icon:'🖼️',cls:'icon-img',label:'Image'},
-  jpeg:{icon:'🖼️',cls:'icon-img',label:'Image'},webp:{icon:'🖼️',cls:'icon-img',label:'Image'},
-  tga:{icon:'🖼️',cls:'icon-img',label:'Texture'},ktx:{icon:'🖼️',cls:'icon-img',label:'Texture'},
-  dds:{icon:'🖼️',cls:'icon-img',label:'Texture'},mp3:{icon:'🔊',cls:'icon-audio',label:'Audio'},
-  ogg:{icon:'🔊',cls:'icon-audio',label:'Audio'},wav:{icon:'🔊',cls:'icon-audio',label:'Audio'},
-  m4a:{icon:'🔊',cls:'icon-audio',label:'Audio'},
-};
-function getInfo(name){var ext=name.split('.').pop().toLowerCase();return EXT_MAP[ext]||{icon:'📄',cls:'icon-other',label:(ext||'File').toUpperCase()};}
-
-// ════════════════════════════════════════════════════════
-// DROP ZONE
-// ════════════════════════════════════════════════════════
-var dropzone=document.getElementById('dropzone');
-var fileInput=document.getElementById('file-input');
-
-dropzone.addEventListener('click',function(e){e.stopPropagation();fileInput.click();});
-dropzone.addEventListener('dragover',function(e){e.preventDefault();e.stopPropagation();dropzone.classList.add('dragover');});
-dropzone.addEventListener('dragleave',function(e){e.stopPropagation();dropzone.classList.remove('dragover');});
-dropzone.addEventListener('drop',function(e){
-  e.preventDefault();e.stopPropagation();dropzone.classList.remove('dragover');
-  if(e.dataTransfer.files[0]){onFileChosen(e.dataTransfer.files[0]);}
+document.getElementById('apkFile').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  const zip=await loadZip();
+  const z=await zip.loadAsync(f);
+  const files=Object.keys(z.files);
+  const sz=(f.size/1024/1024).toFixed(2)+'MB';
+  document.getElementById('apkResult').style.display='block';
+  document.getElementById('apkName').textContent=f.name;
+  document.getElementById('apkSize').textContent=sz;
+  document.getElementById('apkSizeStat').textContent=sz;
+  document.getElementById('apkEntryStat').textContent=files.length;
+  const rows=[
+    ['File name',f.name],
+    ['File size',sz],
+    ['Total entries',files.length],
+    ['Has native libs',files.some(f=>f.includes('lib/'))? '✅ Yes':'❌ No'],
+    ['Has assets',files.some(f=>f.startsWith('assets/'))? '✅ Yes':'❌ No'],
+    ['Has resources',files.some(f=>f.startsWith('res/'))? '✅ Yes':'❌ No'],
+    ['Kotlin',files.some(f=>f.includes('kotlin'))? '✅ Yes':'No'],
+    ['Unity',files.some(f=>f.includes('unity'))? '✅ Yes':'No'],
+    ['Unreal',files.some(f=>f.includes('UE4'))? '✅ Yes':'No'],
+  ];
+  document.getElementById('apkTable').innerHTML=rows.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  const perms=['INTERNET','CAMERA','READ_EXTERNAL_STORAGE','WRITE_EXTERNAL_STORAGE','VIBRATE','ACCESS_NETWORK_STATE','BILLING','RECORD_AUDIO','BLUETOOTH','LOCATION'];
+  const found=perms.filter(p=>files.some(fi=>fi.includes(p)));
+  document.getElementById('apkPerms').innerHTML=(found.length?found:['None detected']).map(p=>`<span class="perm">${p}</span>`).join('');
+  const dirs=[...new Set(files.map(f=>f.split('/')[0]))].filter(d=>d&&!d.includes('.'));
+  document.getElementById('apkFolders').innerHTML=dirs.map(d=>`<span class="perm tag">${d}/</span>`).join('');
 });
-fileInput.addEventListener('change',function(){if(fileInput.files[0])onFileChosen(fileInput.files[0]);});
+['apkZone','imgZone','audZone','vidZone'].forEach(id=>{
+  const z=document.getElementById(id);
+  z.addEventListener('dragover',e=>{e.preventDefault();z.classList.add('drag')});
+  z.addEventListener('dragleave',()=>z.classList.remove('drag'));
+  z.addEventListener('drop',e=>{e.preventDefault();z.classList.remove('drag');const inp=z.querySelector('input');if(e.dataTransfer.files[0]){const dt=new DataTransfer();dt.items.add(e.dataTransfer.files[0]);inp.files=dt.files;inp.dispatchEvent(new Event('change'))}});
+});
 
-function onFileChosen(file){
-  obbFile=file;
-  var ds=document.getElementById('drop-selected');
-  ds.textContent='✓ '+file.name;ds.style.display='block';
-  dropzone.querySelector('.drop-hint').style.display='none';
-  document.getElementById('fip-name').textContent=file.name;
-  document.getElementById('fip-meta').textContent=formatSize(file.size)+' — indexing…';
-  document.getElementById('fip-count').textContent='…';
-  document.getElementById('file-info-pill').style.display='flex';
-  loadOBB(file);
+// Image Editor
+let origImg=null,curRot=0,curFlipH=1,curFlipV=1;
+const imgCanvas=document.getElementById('imgCanvas');
+const imgCtx=imgCanvas.getContext('2d');
+document.getElementById('imgFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const url=URL.createObjectURL(f);
+  origImg=new Image();
+  origImg.onload=()=>{
+    imgCanvas.width=origImg.width;imgCanvas.height=origImg.height;
+    drawImg();
+    document.getElementById('imgEditor').style.display='block';
+    document.getElementById('iW').textContent=origImg.width+'px';
+    document.getElementById('iH').textContent=origImg.height+'px';
+    document.getElementById('iFmt').textContent=f.type.split('/')[1].toUpperCase();
+    document.getElementById('iSz').textContent=(f.size/1024).toFixed(1)+'KB';
+    document.getElementById('resW').value=origImg.width;
+    document.getElementById('resH').value=origImg.height;
+  };
+  origImg.src=url;
+});
+function drawImg(){if(!origImg)return;imgCtx.save();imgCtx.clearRect(0,0,imgCanvas.width,imgCanvas.height);imgCtx.translate(imgCanvas.width/2,imgCanvas.height/2);imgCtx.rotate(curRot*Math.PI/180);imgCtx.scale(curFlipH,curFlipV);imgCtx.drawImage(origImg,-origImg.width/2,-origImg.height/2);imgCtx.restore();applyFilters();}
+function applyFilters(){
+  const br=document.getElementById('brSlider').value;
+  const ct=document.getElementById('ctSlider').value;
+  const sat=document.getElementById('satSlider').value;
+  const hue=document.getElementById('hueSlider').value;
+  const blur=document.getElementById('blurSlider').value;
+  document.getElementById('brVal').textContent=br;
+  document.getElementById('ctVal').textContent=ct;
+  document.getElementById('satVal').textContent=sat;
+  document.getElementById('hueVal').textContent=hue;
+  document.getElementById('blurVal').textContent=blur;
+  imgCanvas.style.filter=`brightness(${(parseInt(br)+100)/100}) contrast(${(parseInt(ct)+100)/100}) saturate(${sat/100}) hue-rotate(${hue}deg) blur(${blur}px)`;
 }
+function applyPreset(p){
+  const presets={none:[0,0,100,0,0],warm:[10,10,120,30,0],cool:[-5,5,80,200,0],grayscale:[0,0,0,0,0],sepia:[10,10,80,30,0],vivid:[10,20,160,0,0],night:[-30,10,60,240,2]};
+  const v=presets[p]||presets.none;
+  document.getElementById('brSlider').value=v[0];
+  document.getElementById('ctSlider').value=v[1];
+  document.getElementById('satSlider').value=v[2];
+  document.getElementById('hueSlider').value=v[3];
+  document.getElementById('blurSlider').value=v[4];
+  applyFilters();
+}
+function rotateImg(deg){curRot=(curRot+deg)%360;drawImg();}
+function flipImg(d){if(d==='h')curFlipH*=-1;else curFlipV*=-1;drawImg();}
+function resetImg(){curRot=0;curFlipH=1;curFlipV=1;applyPreset('none');drawImg();}
+function resizeImg(){const w=parseInt(document.getElementById('resW').value)||origImg.width;const h=parseInt(document.getElementById('resH').value)||origImg.height;imgCanvas.width=w;imgCanvas.height=h;imgCtx.drawImage(origImg,0,0,w,h);document.getElementById('iW').textContent=w+'px';document.getElementById('iH').textContent=h+'px';}
+function downloadImg(){const fmt=document.getElementById('exportFmt').value;const q=parseInt(document.getElementById('exportQ').value)/100;const a=document.createElement('a');a.href=imgCanvas.toDataURL('image/'+fmt,q);a.download='edited.'+fmt;a.click();}
 
-// ════════════════════════════════════════════════════════
-// LOAD OBB
-// ════════════════════════════════════════════════════════
-async function loadOBB(file){
-  var MAX=3*1024*1024*1024;
-  if(file.size>MAX){showToast('error','✗ File exceeds 3 GB ('+formatSize(file.size)+')');return;}
-  showProgress('Parsing OBB…');
-  try{
-    var entries=await parseZip(file);
-    allFiles=entries;
-    allFiles.sort(function(a,b){return a.path.localeCompare(b.path);});
-    var extSet=new Set(allFiles.map(function(f){return f.path.split('.').pop().toLowerCase();}));
-    setProgress(100,'Done!');
-    await new Promise(function(r){setTimeout(r,150);});
-    hideProgress();
-    document.getElementById('fip-name').textContent=file.name;
-    document.getElementById('fip-meta').textContent=formatSize(file.size);
-    document.getElementById('fip-count').textContent=allFiles.length.toLocaleString()+' files';
-    document.getElementById('file-info-pill').style.display='flex';
-    document.getElementById('export-btn').disabled=false;
-    document.getElementById('reset-btn').disabled=false;
-    buildFilters(extSet);
-    filteredFiles=allFiles.slice();
-    renderList();
-    showToast('success','✓ Loaded — '+allFiles.length.toLocaleString()+' files ('+formatSize(file.size)+')');
-  }catch(e){
-    hideProgress();
-    showToast('error','✗ '+e.message);
-    console.error(e);
-  }
-}
+// Audio
+const audPlayer=document.getElementById('audPlayer');
+document.getElementById('audFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  audPlayer.src=URL.createObjectURL(f);
+  document.getElementById('audEditor').style.display='block';
+  document.getElementById('audName').textContent=f.name;
+  document.getElementById('audSize').textContent=(f.size/1024).toFixed(1)+'KB';
+  document.getElementById('audFmt').textContent=f.type.split('/')[1]?.toUpperCase()||'Audio';
+  audPlayer.onloadedmetadata=()=>{
+    const d=audPlayer.duration;
+    document.getElementById('audDur').textContent=fmtTime(d);
+    document.getElementById('audInfo').textContent=fmtTime(d)+' • '+((f.size/1024).toFixed(1))+'KB';
+    document.getElementById('trimS').max=d;document.getElementById('trimE').max=d;
+    document.getElementById('trimE').value=d;document.getElementById('trimEVal').textContent=d.toFixed(1);
+    buildVis();
+  };
+});
+function fmtTime(s){const m=Math.floor(s/60);const sec=Math.floor(s%60);return m+':'+(sec<10?'0':'')+sec;}
+function buildVis(){const v=document.getElementById('audVis');v.innerHTML='';for(let i=0;i<60;i++){const b=document.createElement('div');b.className='bar';b.style.height=(8+Math.random()*44)+'px';v.appendChild(b);}audPlayer.addEventListener('timeupdate',()=>{const bars=v.querySelectorAll('.bar');const p=audPlayer.currentTime/audPlayer.duration;bars.forEach((b,i)=>{b.style.background=i/bars.length<p?'var(--green)':'var(--accent)';});});}
+function setAudVol(){const v=document.getElementById('volSlider').value;document.getElementById('volVal').textContent=v;audPlayer.volume=Math.min(v/100,1);}
+function setAudSpd(){const v=document.getElementById('spdSlider').value;document.getElementById('spdVal').textContent=v;audPlayer.playbackRate=parseFloat(v);}
+function updateTrim(){const s=parseFloat(document.getElementById('trimS').value);const e=parseFloat(document.getElementById('trimE').value);document.getElementById('trimSVal').textContent=s.toFixed(1);document.getElementById('trimEVal').textContent=e.toFixed(1);}
+function previewTrim(){const s=parseFloat(document.getElementById('trimS').value);audPlayer.currentTime=s;audPlayer.play();}
+function toggleEffect(t){const btns=document.querySelectorAll('#tab-aud .btn-sm');btns.forEach(b=>{if(b.textContent.toLowerCase().includes(t.split('')[0]))b.classList.toggle('btn-primary')});}
+function downloadAud(){const a=document.createElement('a');a.href=audPlayer.src;a.download='edited_audio';a.click();}
 
-// ════════════════════════════════════════════════════════
-// FILTERS + LIST
-// ════════════════════════════════════════════════════════
-var GROUPS={
-  '3D':['fbx','obj','dae','glb','gltf','blend'],
-  'Data':['asset','unity3d','bundle','json','xml','bin','dat','bytes'],
-  'Image':['png','jpg','jpeg','webp','tga','ktx','dds'],
-  'Audio':['mp3','ogg','wav','m4a']
-};
-
-function buildFilters(extSet){
-  var row=document.getElementById('filter-row');
-  row.innerHTML='<button class="filter-btn active" onclick="setFilter(\'all\',this)">All</button>';
-  var found={};
-  extSet.forEach(function(ext){
-    for(var g in GROUPS){if(GROUPS[g].indexOf(ext)>=0){found[g]=true;break;}}
-  });
-  for(var g in found){
-    var b=document.createElement('button');
-    b.className='filter-btn';b.textContent=g;
-    b.onclick=(function(gName){return function(){setFilter(gName,this);};})(g);
-    row.appendChild(b);
-  }
+// Video
+const vidPlayer=document.getElementById('vidPlayer');
+document.getElementById('vidFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  vidPlayer.src=URL.createObjectURL(f);
+  document.getElementById('vidEditor').style.display='block';
+  document.getElementById('vSz').textContent=(f.size/1024/1024).toFixed(2)+'MB';
+  document.getElementById('vFmt').textContent=f.type.split('/')[1]?.toUpperCase()||'Video';
+  vidPlayer.onloadedmetadata=()=>{
+    document.getElementById('vDur').textContent=fmtTime(vidPlayer.duration);
+    document.getElementById('vRes').textContent=vidPlayer.videoWidth+'×'+vidPlayer.videoHeight;
+    document.getElementById('vSpd').max=4;
+  };
+});
+function applyVidFilter(){
+  const br=document.getElementById('vBr').value;const ct=document.getElementById('vCt').value;const sat=document.getElementById('vSat').value;const hue=document.getElementById('vHue').value;const blur=document.getElementById('vBlur').value;const op=document.getElementById('vOp').value;
+  document.getElementById('vBrVal').textContent=br;document.getElementById('vCtVal').textContent=ct;document.getElementById('vSatVal').textContent=sat;document.getElementById('vHueVal').textContent=hue;document.getElementById('vBlurVal').textContent=blur;document.getElementById('vOpVal').textContent=op;
+  vidPlayer.style.filter=`brightness(${br/100}) contrast(${ct/100}) saturate(${sat/100}) hue-rotate(${hue}deg) blur(${blur}px) opacity(${op/100})`;
 }
-
-function setFilter(f,btn){
-  activeFilter=f;
-  document.querySelectorAll('.filter-btn').forEach(function(b){b.classList.remove('active');});
-  btn.classList.add('active');
-  filterFiles();
+function applyVidPreset(p){
+  const ps={none:[100,100,100,0,0,100],vivid:[110,130,160,0,0,100],bw:[100,110,0,0,0,100],warm:[115,105,120,30,0,100],cool:[95,100,80,200,0,100],night:[70,110,60,240,1,95]};
+  const v=ps[p]||ps.none;
+  ['vBr','vCt','vSat','vHue','vBlur','vOp'].forEach((id,i)=>{document.getElementById(id).value=v[i];});
+  applyVidFilter();
 }
-
-function filterFiles(){
-  var q=document.getElementById('search-input').value.toLowerCase();
-  filteredFiles=allFiles.filter(function(f){
-    if(q&&!f.path.toLowerCase().includes(q))return false;
-    if(activeFilter==='all')return true;
-    var ext=f.path.split('.').pop().toLowerCase();
-    return(GROUPS[activeFilter]||[]).indexOf(ext)>=0;
-  });
-  renderList();
-}
-
-function renderList(){
-  var list=document.getElementById('file-list');
-  document.getElementById('visible-count').textContent=filteredFiles.length.toLocaleString();
-  if(!filteredFiles.length){
-    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No files found</div>';
-    return;
-  }
-  var frag=document.createDocumentFragment();
-  filteredFiles.forEach(function(f){
-    var info=getInfo(f.path);
-    var name=f.path.split('/').pop();
-    var isMod=!!modifications[f.path];
-    var div=document.createElement('div');
-    div.className='file-item'+(selectedPath===f.path?' selected':'')+(isMod?' modified':'');
-    div.innerHTML='<div class="file-icon '+info.cls+'">'+info.icon+'</div>'
-      +'<div class="file-item-info">'
-      +'<div class="file-item-name">'+name+'</div>'
-      +'<div class="file-item-meta">'+info.label+' &middot; '+formatSize(f.size)+'</div>'
-      +'</div>'+(isMod?'<div class="mod-dot" title="Modified"></div>':'');
-    div.onclick=(function(p){return function(){selectFile(p);closeSidebar();};})(f.path);
-    frag.appendChild(div);
-  });
-  list.innerHTML='';list.appendChild(frag);
-}
-
-// ════════════════════════════════════════════════════════
-// FILE DETAIL
-// ════════════════════════════════════════════════════════
-function selectFile(path){
-  selectedPath=path;renderList();showDetail(path);
-}
-
-function showDetail(path){
-  var f=allFiles.find(function(x){return x.path===path;});
-  if(!f)return;
-  var info=getInfo(path),name=path.split('/').pop(),isMod=!!modifications[path];
-  var meth=f.compMethod===0?'STORE':f.compMethod===8?'DEFLATE':'Method '+f.compMethod;
-  document.getElementById('toolbar').style.display='flex';
-  document.getElementById('toolbar-title').textContent=name;
-  document.getElementById('detail-area').innerHTML=
-    '<div class="asset-card">'
-    +'<div class="card-head">'
-    +'<div class="card-icon '+info.cls+'">'+info.icon+'</div>'
-    +'<div style="flex:1;min-width:0"><h4>'+name+'</h4><div class="card-path">'+path+'</div></div>'
-    +(isMod?'<span class="card-badge">Modified</span>':'')
-    +'</div>'
-    +'<div class="meta-grid">'
-    +'<div class="meta-item"><label>Type</label><div class="val">'+info.label+'</div></div>'
-    +'<div class="meta-item"><label>Method</label><div class="val">'+meth+'</div></div>'
-    +'<div class="meta-item"><label>Orig Size</label><div class="val">'+formatSize(f.size)+'</div></div>'
-    +'<div class="meta-item"><label>Comp Size</label><div class="val">'+formatSize(f.compSize)+'</div></div>'
-    +(isMod?'<div class="meta-item meta-full"><label>Replacement</label><div class="val" style="color:var(--warn)">'+modifications[path].name+' ('+formatSize(modifications[path].size)+')</div></div>':'')
-    +'<div class="meta-item meta-full"><label>Path</label><div class="val" style="font-size:10px;word-break:break-all">'+path+'</div></div>'
-    +'</div>'
-    +'<div class="action-row">'
-    +'<button class="btn btn-success" onclick="downloadSelected()">⬇ Download</button>'
-    +'<button class="btn btn-primary" onclick="openReplaceModal()">↺ Replace</button>'
-    +(isMod?'<button class="btn btn-danger" onclick="clearMod(\''+path.replace(/'/g,"\\'")+'\')" >✕ Clear</button>':'')
-    +'</div>'
-    +'</div>';
-}
-
-async function downloadSelected(){
-  if(!selectedPath)return;
-  var f=allFiles.find(function(x){return x.path===selectedPath;});
-  if(!f)return;
-  var name=selectedPath.split('/').pop();
-  showToast('info','⬇ Extracting '+name+'…');
-  try{
-    var blob=await f.toBlob();
-    triggerDownload(blob,name);
-    showToast('success','✓ Downloaded: '+name+' ('+formatSize(blob.size)+')');
-  }catch(e){showToast('error','✗ '+e.message);}
-}
-
-function triggerDownload(blob,name){
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');a.href=url;a.download=name;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  setTimeout(function(){URL.revokeObjectURL(url);},15000);
-}
-
-function clearMod(path){
-  delete modifications[path];renderList();showDetail(path);
-  showToast('info','Replacement cleared');
-}
-
-// ════════════════════════════════════════════════════════
-// REPLACE MODAL
-// ════════════════════════════════════════════════════════
-function openReplaceModal(){
-  if(!selectedPath)return;
-  document.getElementById('replace-target').textContent=selectedPath.split('/').pop();
-  document.getElementById('replace-chosen').style.display='none';
-  document.getElementById('replace-input').value='';
-  document.getElementById('confirm-rep-btn').disabled=true;
-  pendingReplace=null;
-  document.getElementById('replace-modal').classList.add('show');
-}
-function closeReplaceModal(){document.getElementById('replace-modal').classList.remove('show');}
-function onReplaceChosen(inp){
-  if(!inp.files[0])return;
-  pendingReplace=inp.files[0];
-  var el=document.getElementById('replace-chosen');
-  el.textContent='✓ '+pendingReplace.name+' ('+formatSize(pendingReplace.size)+')';
-  el.style.display='block';
-  document.getElementById('confirm-rep-btn').disabled=false;
-}
-function confirmReplace(){
-  if(!pendingReplace||!selectedPath)return;
-  modifications[selectedPath]={file:pendingReplace,name:pendingReplace.name,size:pendingReplace.size};
-  var f=allFiles.find(function(x){return x.path===selectedPath;});
-  if(f)f.size=pendingReplace.size;
-  closeReplaceModal();renderList();showDetail(selectedPath);
-  showToast('success','✓ Queued: '+selectedPath.split('/').pop());
-}
-
-// ════════════════════════════════════════════════════════
-// EXPORT
-// ════════════════════════════════════════════════════════
-async function exportOBB(){
-  if(!allFiles.length)return;
-  var mode=useCompression?'DEFLATE':'STORE';
-  showProgress('Exporting OBB ('+mode+')…');
-  try{
-    var blob=await buildZip(allFiles,modifications,mode);
-    hideProgress();
-    var orig=document.getElementById('fip-name').textContent;
-    var name=orig.replace(/\.obb$/i,'_modified.obb')||'modified.obb';
-    triggerDownload(blob,name);
-    var mc=Object.keys(modifications).length;
-    showToast('success','✓ Exported '+formatSize(blob.size)+(mc?' · '+mc+' modified':''));
-  }catch(e){hideProgress();showToast('error','✗ Export failed: '+e.message);console.error(e);}
-}
-
-// ════════════════════════════════════════════════════════
-// COMPRESSION TOGGLE
-// ════════════════════════════════════════════════════════
-function toggleCompression(){
-  useCompression=!useCompression;
-  var btn=document.getElementById('compress-btn');
-  if(useCompression){
-    btn.innerHTML='🗜 <span class="btn-label">DEFLATE</span>';
-    btn.classList.add('active-mode');
-  } else {
-    btn.innerHTML='⚡ <span class="btn-label">STORE</span>';
-    btn.classList.remove('active-mode');
-  }
-  showToast('info',useCompression?'🗜 DEFLATE mode (smaller)':'⚡ STORE mode (fastest)');
-}
-
-// ════════════════════════════════════════════════════════
-// RESET
-// ════════════════════════════════════════════════════════
-function resetAll(){
-  if(!confirm('Reset? All replacements will be lost.'))return;
-  obbFile=null;allFiles=[];filteredFiles=[];selectedPath=null;modifications={};
-  document.getElementById('file-list').innerHTML='';
-  document.getElementById('visible-count').textContent='0';
-  document.getElementById('file-info-pill').style.display='none';
-  document.getElementById('export-btn').disabled=true;
-  document.getElementById('reset-btn').disabled=true;
-  document.getElementById('toolbar').style.display='none';
-  document.getElementById('detail-area').innerHTML='<div class="empty-state"><div class="empty-icon">🗂️</div><p style="font-size:13px;font-weight:500">Load an OBB file to get started</p><p style="font-size:12px;color:var(--text3)">All processing is 100% local</p></div>';
-  document.getElementById('filter-row').innerHTML='<button class="filter-btn active" onclick="setFilter(\'all\',this)">All</button>';
-  var ds=document.getElementById('drop-selected');ds.style.display='none';
-  dropzone.querySelector('.drop-hint').style.display='';
-  fileInput.value='';
-  showToast('info','Reset complete');
-}
-
-// ════════════════════════════════════════════════════════
-// DIAGNOSE
-// ════════════════════════════════════════════════════════
-async function diagnoseFile(){
-  if(!obbFile){showToast('info','Load a file first, then click 🔍');return;}
-  var file=obbFile,READ=256;
-  var hbuf=await file.slice(0,READ).arrayBuffer();
-  var tbuf=await file.slice(Math.max(0,file.size-READ)).arrayBuffer();
-  var ha=new Uint8Array(hbuf),ta=new Uint8Array(tbuf);
-  function hex(arr){return Array.from(arr).map(function(b,i){return(i%16===0?'\n'+i.toString(16).padStart(5,'0')+':  ':' ')+b.toString(16).padStart(2,'0');}).join('').trim();}
-  function ascii(arr){return Array.from(arr).map(function(b){return b>=32&&b<127?String.fromCharCode(b):'.';}).join('');}
-  var tdv=new DataView(tbuf),found=[];
-  for(var i=0;i<=ta.length-4;i++){
-    var v=tdv.getUint32(i,true);
-    if(v===SIG_EOCD)found.push('EOCD at tail-'+(READ-i));
-    if(v===SIG_LOC64)found.push('ZIP64 Locator at tail-'+(READ-i));
-    if(v===SIG_EOCD64)found.push('ZIP64 EOCD at tail-'+(READ-i));
-  }
-  var hdv=new DataView(hbuf),hs=hdv.getUint32(0,true);
-  var headInfo=hs===SIG_LFH?'Starts with LFH ✓ (valid ZIP)':hs===SIG_CD?'Starts with CD record':'No ZIP sig ✗ — 0x'+hs.toString(16);
-  var report=['File: '+file.name,'Size: '+formatSize(file.size)+' ('+file.size+' bytes)','',
-    'HEAD sig: '+headInfo,
-    'TAIL sigs: '+(found.length?found.join(', '):'NONE — not a valid ZIP tail!'),
-    '','=== First '+READ+' bytes ===',hex(ha),'','=== Last '+READ+' bytes ===',hex(ta),'','=== Last '+READ+' ASCII ===',ascii(ta)].join('\n');
-  document.getElementById('toolbar').style.display='flex';
-  document.getElementById('toolbar-title').textContent='Diagnosis Report';
-  document.getElementById('dl-btn').style.display='none';
-  document.getElementById('rep-btn').style.display='none';
-  document.getElementById('detail-area').innerHTML=
-    '<div class="asset-card" style="max-width:100%">'
-    +'<div class="card-head"><div class="card-icon icon-data">🔍</div>'
-    +'<div><h4>File Diagnosis</h4><div class="card-path">'+file.name+' — '+formatSize(file.size)+'</div></div></div>'
-    +'<div style="padding:16px 18px">'
-    +'<p style="font-size:11px;color:var(--text2);margin-bottom:10px">Share this to get help diagnosing the format.</p>'
-    +'<pre class="diag-pre">'+report.replace(/</g,'&lt;')+'</pre>'
-    +'<button class="btn btn-ghost" style="margin-top:12px" onclick="navigator.clipboard.writeText(document.querySelector(\'.diag-pre\').textContent).then(function(){showToast(\'success\',\'✓ Copied!\')})">📋 Copy Report</button>'
-    +'</div></div>';
-}
-
-// ════════════════════════════════════════════════════════
-// MOBILE SIDEBAR
-// ════════════════════════════════════════════════════════
-function toggleSidebar(){
-  var s=document.getElementById('sidebar');
-  var o=document.getElementById('sidebar-overlay');
-  if(s.classList.contains('open')){s.classList.remove('open');o.classList.remove('show');}
-  else{s.classList.add('open');o.classList.add('show');}
-}
-function closeSidebar(){
-  document.getElementById('sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').classList.remove('show');
-}
-
-// ════════════════════════════════════════════════════════
-// PROGRESS
-// ════════════════════════════════════════════════════════
-function showProgress(msg){
-  document.getElementById('prog-title').textContent=msg;
-  document.getElementById('prog-label').textContent='Please wait…';
-  document.getElementById('prog-fill').style.width='0%';
-  document.getElementById('prog-sub').textContent='';
-  document.getElementById('prog-overlay').classList.add('show');
-}
-function setProgress(pct,label){
-  document.getElementById('prog-fill').style.width=Math.min(100,pct)+'%';
-  document.getElementById('prog-sub').textContent=label||'';
-}
-function hideProgress(){document.getElementById('prog-overlay').classList.remove('show');}
-
-// ════════════════════════════════════════════════════════
-// TOASTS
-// ════════════════════════════════════════════════════════
-function showToast(type,msg){
-  var icons={success:'✓',error:'✗',info:'ℹ'};
-  var el=document.createElement('div');
-  el.className='toast '+type;
-  el.innerHTML='<span>'+icons[type]+'</span><span>'+msg+'</span>';
-  document.getElementById('toast-wrap').appendChild(el);
-  setTimeout(function(){el.remove();},3500);
-}
+function setVidSpd(){const v=document.getElementById('vSpd').value;document.getElementById('vSpdVal').textContent=v;vidPlayer.playbackRate=parseFloat(v);}
+function setVidVol(){const v=document.getElementById('vVol').value;document.getElementById('vVolVal').textContent=v;vidPlayer.volume=Math.min(v/100,1);}
+function captureFrame(){const c=document.createElement('canvas');c.width=vidPlayer.videoWidth;c.height=vidPlayer.videoHeight;c.getContext('2d').drawImage(vidPlayer,0,0);const img=document.createElement('img');img.className='thumb';img.src=c.toDataURL();img.onclick=()=>{const a=document.createElement('a');a.href=img.src;a.download='frame.png';a.click();};document.getElementById('capturedFrames').appendChild(img);}
+function resetVid(){applyVidPreset('none');}
 </script>
-</body>
-</html>
